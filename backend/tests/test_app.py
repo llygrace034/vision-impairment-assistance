@@ -237,6 +237,7 @@ def test_read_document_thought_only_response_is_treated_as_unreadable(client, im
 def test_read_document_upstream_timeout_is_200_with_a_speakable_sentence(client, image_file):
     """A 5xx makes the agent apologise vaguely; a sentence it can say is the design."""
     respx.post(GEMINI_TEST_URL).mock(side_effect=httpx.TimeoutException("read timed out"))
+    respx.post(GEMINI_FALLBACK_URL).mock(side_effect=httpx.TimeoutException("fallback timed out"))
     r = client.post("/read_document", files=image_file)
     assert r.status_code == 200
     body = r.json()
