@@ -40,6 +40,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 GEMINI_TEST_MODEL = "gemma-test-model"
 GEMINI_TEST_URL = app_module.GEMINI_URL.format(model=GEMINI_TEST_MODEL)
+GEMINI_FALLBACK_MODEL = "fallback-test-model"
+GEMINI_FALLBACK_URL = app_module.GEMINI_URL.format(model=GEMINI_FALLBACK_MODEL)
 ELEVENLABS_TOKEN_URL = "https://api.elevenlabs.io/v1/convai/conversation/token"
 
 
@@ -60,6 +62,7 @@ def pinned_config(monkeypatch):
     """Pin every config global so no test reads the developer's real .env.local."""
     monkeypatch.setattr(app_module, "GEMINI_API_KEY", "test-gemini-key")
     monkeypatch.setattr(app_module, "VISION_MODEL", GEMINI_TEST_MODEL)
+    monkeypatch.setattr(app_module, "VISION_FALLBACK_MODEL", GEMINI_FALLBACK_MODEL)
     monkeypatch.setattr(app_module, "ELEVENLABS_API_KEY", "test-elevenlabs-key")
     monkeypatch.setattr(app_module, "ELEVENLABS_AGENT_ID", "test-agent-id")
 

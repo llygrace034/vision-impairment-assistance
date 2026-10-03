@@ -21,6 +21,7 @@ import respx
 from .conftest import (
     ELEVENLABS_TOKEN_URL,
     GEMINI_TEST_MODEL,
+    GEMINI_FALLBACK_URL,
     GEMINI_TEST_URL,
     gemini_payload,
     text_payload,
@@ -236,6 +237,7 @@ def test_read_document_thought_only_response_is_treated_as_unreadable(client, im
 def test_read_document_upstream_timeout_is_200_with_a_speakable_sentence(client, image_file):
     """A 5xx makes the agent apologise vaguely; a sentence it can say is the design."""
     respx.post(GEMINI_TEST_URL).mock(side_effect=httpx.TimeoutException("read timed out"))
+    respx.post(GEMINI_FALLBACK_URL).mock(side_effect=httpx.TimeoutException("fallback timed out"))
     r = client.post("/read_document", files=image_file)
     assert r.status_code == 200
     body = r.json()
@@ -248,6 +250,7 @@ def test_read_document_upstream_timeout_is_200_with_a_speakable_sentence(client,
 def test_read_document_upstream_read_timeout_subclass_is_caught(client, image_file):
     """httpx raises ReadTimeout in practice; it must hit the same branch."""
     respx.post(GEMINI_TEST_URL).mock(side_effect=httpx.ReadTimeout("the 30.5s tail call"))
+    respx.post(GEMINI_FALLBACK_URL).mock(side_effect=httpx.ReadTimeout("fallback too"))
     r = client.post("/read_document", files=image_file)
     assert r.status_code == 200
     assert "try again" in r.json()["text"].lower()
@@ -257,6 +260,9 @@ def test_read_document_upstream_read_timeout_subclass_is_caught(client, image_fi
 @respx.mock
 def test_read_document_gemini_non_200_is_200_with_a_speakable_sentence(client, image_file, status):
     respx.post(GEMINI_TEST_URL).mock(return_value=httpx.Response(status, text="upstream said no"))
+    fallback = respx.post(GEMINI_FALLBACK_URL).mock(
+        return_value=httpx.Response(status, text="fallback said no")
+    )
     r = client.post("/read_document", files=image_file)
     assert r.status_code == 200
     body = r.json()
@@ -264,6 +270,43 @@ def test_read_document_gemini_non_200_is_200_with_a_speakable_sentence(client, i
     assert "trouble reading that" in body["text"].lower()
     assert str(status) in body["error"]
     assert "elapsed_s" in body
+    # A 4xx is our request's fault and must not be retried on another model;
+    # a 5xx or 429 is the model having a bad minute and must be.
+    assert fallback.called == (status >= 500 or status == 429)
+
+
+@pytest.mark.parametrize("primary", ["500", "timeout"])
+@respx.mock
+def test_read_document_falls_back_when_the_primary_model_fails(client, image_file, primary):
+    """Measured 2026-10-03: Gemma returned 500 / timed out on frames it had just
+    read; the fallback must answer with real text, and say which model did."""
+    if primary == "timeout":
+        respx.post(GEMINI_TEST_URL).mock(side_effect=httpx.ReadTimeout("stalled"))
+    else:
+        respx.post(GEMINI_TEST_URL).mock(return_value=httpx.Response(500, text="Internal error"))
+    fallback = respx.post(GEMINI_FALLBACK_URL).mock(
+        return_value=httpx.Response(200, json=gemini_payload({"text": "TYPE: Receipt. TOTAL GBP 3.65"}))
+    )
+    r = client.post("/read_document", files=image_file)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["text"].startswith("TYPE: Receipt")
+    assert body["model"] == "fallback-test-model"
+    assert fallback.called
+    # Non-Gemma models must not receive the Gemma-only thinkingConfig.
+    sent = json.loads(fallback.calls.last.request.content)
+    assert "generationConfig" not in sent
+
+
+@respx.mock
+def test_read_document_no_fallback_when_disabled(client, appmod, monkeypatch, image_file):
+    monkeypatch.setattr(appmod, "VISION_FALLBACK_MODEL", "")
+    respx.post(GEMINI_TEST_URL).mock(return_value=httpx.Response(500, text="Internal error"))
+    fallback = respx.post(GEMINI_FALLBACK_URL).mock(return_value=httpx.Response(200, json={}))
+    r = client.post("/read_document", files=image_file)
+    assert r.status_code == 200
+    assert "trouble reading that" in r.json()["text"].lower()
+    assert not fallback.called
 
 
 # --------------------------------------------------------------------------

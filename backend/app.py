@@ -30,6 +30,12 @@ load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 VISION_MODEL = os.getenv("GEMMA_VISION_MODEL", "gemma-4-26b-a4b-it")
+# Used only when the primary model fails (5xx, or timeout). Measured on
+# 2026-10-03: gemma-4-26b-a4b-it returned HTTP 500 "Internal error encountered"
+# or timed out on four consecutive frames it had read correctly minutes before,
+# while gemini-flash-latest read the same frames in 2.6-3.3s. Set it to "" to
+# disable. A demo must not depend on one upstream model having a good minute.
+VISION_FALLBACK_MODEL = os.getenv("VISION_FALLBACK_MODEL", "gemini-flash-latest")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID", "")
 CORS_ORIGINS = [
@@ -195,24 +201,52 @@ async def read_document(image: UploadFile = File(...)) -> dict:
     }
 
     started = time.monotonic()
-    try:
-        async with httpx.AsyncClient(timeout=VISION_TIMEOUT) as client:
-            r = await client.post(
-                GEMINI_URL.format(model=VISION_MODEL),
-                headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
-                json=body,
-            )
-    except httpx.TimeoutException:
-        # Never raise into the agent: a 5xx makes it apologise vaguely. Hand back
-        # a sentence it can usefully say out loud instead.
-        return {"text": "I could not read that in time. Please hold the letter still and try again."}
+    models = [VISION_MODEL] + ([VISION_FALLBACK_MODEL] if VISION_FALLBACK_MODEL else [])
+    r = None
+    used = VISION_MODEL
+    error: str | None = None
+    # The primary gets a shorter budget when a fallback exists, so that a
+    # Gemma stall still leaves time for the fallback inside the client tool's
+    # 120s window and the user's patience.
+    primary_timeout = httpx.Timeout(30.0, connect=10.0) if len(models) > 1 else VISION_TIMEOUT
+    for i, model in enumerate(models):
+        used = model
+        req = dict(body)
+        if not model.startswith("gemma"):
+            # thinkingLevel is a Gemma field; Gemini models reject or ignore it.
+            req = {k: v for k, v in body.items() if k != "generationConfig"}
+        try:
+            async with httpx.AsyncClient(timeout=primary_timeout if i == 0 else VISION_TIMEOUT) as client:
+                r = await client.post(
+                    GEMINI_URL.format(model=model),
+                    headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
+                    json=req,
+                )
+        except httpx.TimeoutException:
+            r = None
+            error = f"{model}: timeout"
+            continue
+        if r.status_code == 200:
+            break
+        error = f"{model}: {r.status_code}: {r.text[:200]}"
+        if r.status_code < 500 and r.status_code != 429:
+            break  # a 4xx is our bug, not the model having a bad minute
 
     elapsed = round(time.monotonic() - started, 2)
+
+    if r is None:
+        # Never raise into the agent: a 5xx makes it apologise vaguely. Hand back
+        # a sentence it can usefully say out loud instead.
+        return {
+            "text": "I could not read that in time. Please hold the letter still and try again.",
+            "error": error,
+            "elapsed_s": elapsed,
+        }
 
     if r.status_code != 200:
         return {
             "text": "I had trouble reading that. Please try again.",
-            "error": f"{r.status_code}: {r.text[:200]}",
+            "error": error,
             "elapsed_s": elapsed,
         }
 
@@ -223,4 +257,4 @@ async def read_document(image: UploadFile = File(...)) -> dict:
             "elapsed_s": elapsed,
         }
 
-    return {"text": text, "elapsed_s": elapsed}
+    return {"text": text, "elapsed_s": elapsed, "model": used}
