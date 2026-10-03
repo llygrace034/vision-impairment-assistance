@@ -15,7 +15,8 @@ Read this **before** the event. On the day, you want Section 5 printed and Secti
 
 Written 2026-10-03 against commit `39b8655`, then revised the same day against
 `docs/research/08-gemma-live-api-test-results.md` — **live HTTP testing against a real API key**,
-which overturned the model pin, the latency budget and several assumptions that were load-bearing
+which overturned the model pin — twice, §2 then §§6.1/10 — and which, contrary to its own first
+reading, left the 8-second latency budget standing
 for this file. The revised material is §§0.1–0.4, 3.1a, and the marked passages in §§1.5, 2.4, 3.1,
 3.3, 4.5, 5 and Appendix A. **Where this file and the docs-based notes 01 and 07 disagree, note 08
 wins.**
@@ -52,22 +53,24 @@ the app is finished.
 
 ### 0.1 The model pin — **FIXED**
 
-`[REPO]` `.env.example` now pins `GEMMA_MODEL=gemma-4-31b-it` and
-`GEMMA_VISION_MODEL=gemma-4-31b-it`, with a comment citing
-`docs/research/08-gemma-live-api-test-results.md` §2 and noting that vision is verified working on
-that ID specifically. It also stages two commented-out lines for the split-path architecture
-(§0.2): `#CHAT_MODEL=gemini-2.5-flash-lite` and `#VISION_TIMEOUT_MS=90000`, inert until the backend
-reads them.
+`[REPO]` `.env.example` now pins `GEMMA_MODEL=gemma-4-26b-a4b-it` and
+`GEMMA_VISION_MODEL=gemma-4-26b-a4b-it`, with an inline head-to-head citing
+`docs/research/08-gemma-live-api-test-results.md` §§6.1 and 10 — vision is verified on that ID
+against all three letters in `test-letters/`. `LLM_TIMEOUT_MS=8000` is unchanged. The two
+split-path lines (`#CHAT_MODEL=gemini-2.5-flash-lite`, `#VISION_TIMEOUT_MS=90000`) are still in
+the file but are marked **no longer needed** and must stay commented out.
 
 **What it used to be, and why it mattered.** Both values were `gemma-3-27b-it`. `[RESEARCH]` Note 08
 §2 records the live result: a flat **404**, verbatim *"models/gemma-3-27b-it is not found for API
 version v1beta, or is not supported for generateContent"*. The repo's defaults could never have
 worked on any request. Earlier drafts of this file and of `docs/submission.md` said the fix was
-`gemma-4-26b-a4b-it`, following note 01's recommendation; **that is superseded.** Note 08 verified
-vision specifically on `gemma-4-31b-it`, and the 26B MoE's apparent speed advantage came from a
-confounded test (`maxOutputTokens: 1`), which note 08 §6.1 says explicitly should not be used to
-pick a model. `gemma-4-26b-a4b-it` remains useful as a second 30 RPM quota bucket, since the free
-tier is scoped per project *per model*.
+`gemma-4-31b-it`, on the strength of the §3 vision call; **that is superseded.** Note 08 §6.1 removed
+the `maxOutputTokens: 1` confound with a serial cross at concurrency 1 — `gemma-4-26b-a4b-it`
+answered **8/8 in a 2.0 s median** with thinking active and output uncapped, while `gemma-4-31b-it`
+took **24.9 s** on a single capped token — and §10 then read all three letters on 26b in
+**3.7–4.5 s, 3/3 first attempt, verbatim-correct**. Note 01's recommendation was right for the right
+reason. `gemma-4-31b-it` remains useful only as a second 30 RPM quota bucket, since the free tier is
+scoped per project *per model*.
 
 **What is still open.** The pin is right and the model works at the API level, but **nobody has made
 a `read_document` call through the application stack**, because the backend does not exist yet. The
@@ -78,40 +81,43 @@ the backend, with a real frame, before demo day.** Item 1 in the T-60 checklist.
 did not read or touch `.env.local` — check the pin there too.
 
 `[REPO]` Two good signs already in `.gitignore`: `captures/` and `latency-*.jsonl`. **Ship the
-latency log.** With a model that takes 20–57 seconds (§0.2) this stops being nice-to-have: it is the
-only thing that tells you at T-60 what your actual distribution looks like tonight, rather than
-finding out mid-script.
+latency log.** The model call is 3.7–4.5 s (§0.2), but that figure excludes frame upload, retries and
+TTS — the log is what tells you at T-60 what your actual end-to-end distribution looks like tonight,
+rather than finding out mid-script.
 
-### 0.2 The read is slow and fails half the time — plan the demo around it
+### 0.2 The read is fast, because the pin changed — and here is the number to rehearse against
 
-`[RESEARCH]` This is the single biggest change since this document was first written, and it reaches
-into every other section. Note 08 is **live HTTP against a real key**; every figure below came off
-the wire on 2026-10-03.
+`[RESEARCH]` This section was once the biggest risk in the document. It is now the smallest, and the
+reason is worth knowing: the alarming figures belonged to one model. Note 08 is **live HTTP against a
+real key**; every figure below came off the wire on 2026-10-03.
 
-| Measurement | Value |
+| Measurement, on the pinned `gemma-4-26b-a4b-it` | Value |
 |---|---|
-| Successful Gemma latency, trivial text | **19.9 – 35.1 s** |
-| Structured extraction | **42.6 s** |
-| **Vision, on our own `test-letters/01-hospital-appointment.png`** | **56.8 s** |
-| Failure rate, **strictly serial**, well inside the 30 RPM free-tier quota | **~50 %** (6 of 12 succeeded) |
-| Failure rate at 10-way concurrency | **26 of 40 returned `500 INTERNAL`** |
-| Calls that completed inside 8 s | **zero** |
+| Text, serial, 8 calls, thinking active, output uncapped | **2.0 s median, max 2.5 s, 8/8** (§6.1) |
+| **Vision, all three letters in `test-letters/`** | **3.7–4.5 s, 3/3 first attempt, verbatim-correct** (§10) |
+| Failures across §§6.1 and 10 | **0 in 19 calls** |
+| 40 requests at 8-way concurrency | 33×200, 7×429, **0×500** (§1.1) |
+| Rejected alternative, `gemma-4-31b-it` | 20–57 s, ~50 % serial failure rate, 36.8–56.8 s on vision (§§6, 10) |
 
-Three consequences, in order of how much they will hurt you:
+So `LLM_TIMEOUT_MS=8000` holds with roughly a 4× margin on text and a tighter one on vision
+(~15000 would be safer). **A long silence on stage is a symptom again, not the normal case.**
 
-1. **`LLM_TIMEOUT_MS=8000` cannot hold for a Gemma call.** Not "is tight" — *cannot hold*. Every
-   success exceeded it. The human has adopted note 08 §7 **option 1, split the paths**: fast
-   conversational turns on `gemini-2.5-flash-lite` inside the 8 s budget, and `read_document` on
-   `gemma-4-31b-it` with `VISION_TIMEOUT_MS=90000` and a spoken *"let me read that for you, one
-   moment"* covering the wait. The point is containment — a slow or failed read degrades **one
-   feature** instead of the whole conversation, so the agent can still talk to you and apologise.
-2. **A long silence is now NORMAL, which is a demo-operations problem** (§3.1a). You can no longer
-   tell a healthy read from a dead backend by waiting, so you need discriminators and a pre-agreed
-   abandon time.
-3. **Retries are mandatory, and they are expensive.** At a ~50 % per-call failure rate you will
-   retry roughly every other read, and a retry costs another 20–57 s. Two consecutive failures is a
-   ~25 % event. `docs/submission.md` Section B now budgets the demo at ~2 minutes rather than 90
-   seconds because of this; read that reality box before you rehearse.
+Three consequences, in order of how much they change the plan:
+
+1. **`LLM_TIMEOUT_MS=8000` holds.** Against 2.0 s median on text and a 4.5 s worst case on vision
+   (§§6.1, 10) it is roughly a 4× margin — tight for vision, and ~15000 would be safer. Note 08 §7
+   **option 1, split the paths, is superseded by §10 and must not be built**: one Gemma model serves
+   both paths inside the existing budget. The spoken *"let me read that for you, one moment"* stays,
+   for accessibility rather than for latency cover. Containment survives the simplification anyway:
+   `read_document` is the only path to the letter, so a failed read degrades **one feature** instead
+   of the whole conversation and the agent can still talk to you and apologise.
+2. **A long silence is a symptom again.** A healthy read is 3.7–4.5 s (§10), so anything past about
+   ten seconds is a config, tunnel or session problem rather than a slow model. You still want the
+   discriminators in §3.1a, and a pre-agreed abandon time — but set it at ~15 s, not 75.
+3. **Retries are still mandatory, and they are now cheap.** 26b went **19/19** across §§6.1 and 10
+   with no 5xx, and took 40 requests at 8-way concurrency with zero 500s (§1.1), so budget for 429s
+   rather than failures — and a retry costs you about four seconds, not another minute.
+   `docs/submission.md` Section B is back to a 90-second live read because of this.
 
 `[RESEARCH]` Two mechanical rules the backend must follow, both from note 08 §§1.1 and 6, both of
 which affect what you see on stage: **send requests strictly serially** (concurrency manufactures
@@ -170,8 +176,8 @@ on it raises. The schema is accepted and silently not honoured.
 failure that looks identical to the network ones in §3 but happens on a perfectly good read, and
 which a retry will reproduce roughly as often as not depending on whether the model felt like
 fencing its output. The backend must strip fences before parsing and validate the shape server-side
-regardless. Note 01's recommended alternative — a single forced function call — is listed **PENDING
-/ unverified** in note 08 §8. Do not count on it before demo day.
+regardless. Note 01's recommended alternative — a single forced function call — is **verified working** in note
+08 §8.4, so it is the better target than fence-stripping if there is time before demo day.
 
 ---
 
@@ -334,7 +340,7 @@ the room is bigger than 20 people". Two things it does not cover:
   agent cannot resume a cut-off sentence**. In a feedback loop the agent cuts itself off mid-word
   and never recovers the sentence — and it will do it during the window Section B calls "the agent's
   moment" (≈0:58–1:13 in the reworked script), which is the one stretch of the demo you cannot
-  afford to lose, and which you will have just spent forty-five seconds waiting for.
+  afford to lose, and which arrives about four seconds after the read starts.
 - **Mitigation: push-to-talk.** `[RESEARCH]` Note 04 §9.3 documents `setMuted(isMuted)` (React) and
   `conversation.setMicMuted(true|false)` (vanilla). Hold `Space` to talk, muted otherwise. This also
   gives you the clean keyboard affordance §4.3 wants — and it makes the scripted barge-in (≈1:13 in the reworked script)
@@ -470,14 +476,14 @@ LetterLens **this is the knob to raise** (the exact enum values are flagged UNCO
 So the levers are: bigger type on the paper, more pixels on the page in frame, and a higher
 `mediaResolution` — traded against latency, which §3 then has to absorb.
 
-`[RESEARCH]` **That trade has got much worse since note 07 was written, and it changes the ranking.**
-Note 08 §3 measured a 185 KB full-page scan at **258 image tokens** and a wall-clock of **56.8 s** —
-and the same call spent 1,109 *thought* tokens to emit a 5-token answer, so latency is dominated by
-reasoning, not by pixels. Two things follow. First, image tokens are cheap, so there is no token
-argument against sending a legible frame. Second, there is no latency headroom left to spend on
-`mediaResolution`: at 57 s you are already past what the demo can absorb (§0.2). **Fix it on the
-paper and in the frame, where it is free, and leave `mediaResolution` alone until somebody has
-tested `thinkingConfig` (note 08 §8, pending) and bought the latency back.**
+`[RESEARCH]` **That trade has got much better since note 07 was written, and it changes the ranking
+again.** Note 08 §10 measured the same full-page scans at **258 image tokens** and **3.7–4.5 s** on
+the pinned `gemma-4-26b-a4b-it`, with `thinkingLevel: "minimal"` holding on the vision path — zero
+thought characters on all three calls. Two things follow. First, image tokens are cheap, so there is
+no token argument against sending a legible frame. Second, there now *is* headroom to spend on
+`mediaResolution` inside `LLM_TIMEOUT_MS=8000`, though not much. **Fix it on the paper and in the
+frame first, where it is free; treat `mediaResolution` as the next lever and measure the latency cost
+before relying on it.**
 
 Recommendations:
 
@@ -517,40 +523,45 @@ appear to be done already. Re-measure rather than assuming either way.)*
 Five distinct failure points with five different signatures. `docs/submission.md` Section B gives
 the one-liner to say; this is what is actually happening and what to do about it.
 
-> **⚠️ The premise of this section has changed.** It used to be safe to read "dead air" as "something
-> broke". It is not any more. Per §0.2, a **healthy** read is 20–57 seconds of silence and fails
-> outright about half the time, so **a long pause is now the normal case and not a signal.** Every
-> row below has been re-read with that in mind, and §3.1a is new: it is how you tell a slow read
-> from a dead one without guessing.
+> **⚠️ The premise of this section changed twice, and it is back where it started.** For a while a
+> long pause was the normal case, because the figures came from `gemma-4-31b-it`. Per §0.2, a
+> **healthy** read on the pinned `gemma-4-26b-a4b-it` is **3.7–4.5 seconds** and the model went 19/19
+> without a failure, so **dead air past about ten seconds is a signal again.** §3.1a still earns its
+> place: the discriminators are how you confirm what broke without touching the laptop.
 
 ### 3.1 The failure table
 
 | # | What breaks | What the audience sees/hears | Presenter's next 5 seconds |
 |---|---|---|---|
-| 0 | **Nothing. The read is just slow.** | A long silence after the agent says "let me read that for you". **Indistinguishable from #1, #4 and #5 from the audience's seat, and often from yours.** | **Keep narrating.** This is the default assumption until your abandon time (§3.1a). Do not touch anything, do not reach for the keyboard, do not say "hmm". |
+| 0 | **Nothing. The read is just in flight.** | A few seconds of silence after the agent says "let me read that for you". | **Keep narrating through your one block.** A read is 3.7–4.5 s (§0.2); if you are still talking at ten seconds, start working the §3.1a discriminators. Do not touch anything, do not reach for the keyboard, do not say "hmm". |
 | 1 | **Tunnel drops or restarts** (`PUBLIC_BASE_URL`) | Greeting fine, then after you hold the letter up: a silence that **never ends**, or — worse — a confident summary of a letter it never read. See 3.2. | Stop it talking. *"That's the webhook, not the model — our backend tunnel just dropped."* Go to the recording. Do not debug on stage. |
 | 2 | **ElevenLabs session drops mid-sentence** | The agent **cuts off mid-word**. Silence. | *"We just lost the voice session — this is live over conference wifi."* One reconnect attempt, ~5 s. Then the recording. |
-| 3 | **Vision call fails or times out** against `VISION_TIMEOUT_MS` | A long gap — up to the full 90 s — then the agent says it could not read the letter and gives one physical instruction. | Section B's line still covers this and it is still the right one. Use the **second printed copy**, flatter, closer. **One** retry, and know that the retry costs you another 20–57 s. |
+| 3 | **Vision call fails or times out** against `LLM_TIMEOUT_MS=8000` | An 8-second gap at most, then the agent says it could not read the letter and gives one physical instruction. | Section B's line still covers this and it is still the right one. Use the **second printed copy**, flatter, closer. **One** retry — and it costs you about four seconds, not another minute. |
 | 4 | **Congested wifi / captive-portal re-auth** | Everything *looks* connected. Nothing responds. Long pauses everywhere — **including on the conversational turns, which is the tell** (§3.1a). | *"Conference wifi. Switching to my hotspot."* Switch (pre-tested — 3.3C). If the tunnel URL changes you are now in failure #1 unless you reserved a hostname. |
 | 5 | **The model's scratchpad reaches the agent** (§0.3) | The agent starts speaking and does not stop — rambling, self-correcting, nothing like a letter summary. | Interrupt it. *"That's the model's scratchpad leaking through — one for the backlog."* **No retry will fix this**; the bug is in the backend. Go to the recording. |
 
-Failure #3 is still the one to relax about — the *behaviour* is good even though the wait is long:
+Failure #3 is still the one to relax about, and the *behaviour* is good:
 `skills/letter-reader/SKILL.md` has a whole **"When the image is unusable"** branch that picks one
 concrete physical instruction — closer, flatten, tilt, turn, steady — and caps retries at three
 before suggesting a trusted person. That is designed behaviour, and Section B is right that you
-should sell it rather than apologise for it. What has changed is the *arithmetic*: three retries at
-20–57 s each is up to three minutes, so the skill's retry cap is a product behaviour, not a demo
-plan. **On stage you get one retry.**
+should sell it rather than apologise for it. The *arithmetic* is no longer the problem: three retries
+at 3.7–4.5 s each is under twenty seconds, so the skill's cap is now affordable even on stage.
+**Still take one retry and move on** — on a model that went 19/19 (§0.2), a second failure is a
+signal about your setup rather than bad luck, and no third attempt will fix it.
 
 ### 3.1a Telling a slow read from a dead one — the discriminators
 
-This is the new skill demo day demands of you. A 45-second silence is the healthy case. You need to
-know, without stopping and without touching the laptop, whether to keep talking or to cut.
+This is the skill demo day still demands of you, though it is an easier one than it was: a
+four-second silence is the healthy case, so the question is no longer "is it slow" but "is it alive".
+You need to know, without stopping and without touching the laptop, whether to keep talking or to cut.
 
-**Set an abandon time before you stand up. Use 75 seconds** — comfortably past the 56.8 s vision
-measurement, inside the 90 s `VISION_TIMEOUT_MS`, and short enough that you still have an audience.
+**Set an abandon time before you stand up. Use 15 seconds** — comfortably past the 4.5 s vision
+measurement and the 8 s `LLM_TIMEOUT_MS` the backend fails on, and short enough that nobody notices
+you waited. The throwaway question still works as a discriminator, but for a different reason: the
+conversational path is the *same* model and the same quota bucket as the read, so a fast answer tells
+you the session, tunnel and model are all alive and the problem is downstream of the read.
 Start counting from the moment the agent says *"let me read that for you"*, not from when you raised
-the letter. **Below 75 s you narrate. At 75 s you stop and run the recovery line, regardless of what
+the letter. **Below 15 s you narrate. At 15 s you stop and run the recovery line, regardless of what
 you believe is happening.** The value of a pre-committed number is that it removes the decision from
 the worst possible moment to be making one.
 
@@ -558,11 +569,11 @@ What to look at while you wait, in order of how much it tells you:
 
 | Signal | Healthy slow read | Something is actually broken |
 |---|---|---|
-| **The agent's spoken "let me read that for you" at the start** | **Played.** The tool call reached the agent and the agent acted on it. | **Never played.** The agent never started the tool call — that is a session or config problem, not a slow model. Do not wait out the 75 s; you are waiting for nothing. |
+| **The agent's spoken "let me read that for you" at the start** | **Played.** The tool call reached the agent and the agent acted on it. | **Never played.** The agent never started the tool call — that is a session or config problem, not a slow model. Do not wait out the 15 s; you are waiting for nothing. |
 | **The on-screen `Reading your letter…` state** | Up and stays up. | Never appeared, or it appeared and then cleared with no spoken result — the latter means the tool returned and something downstream ate the answer. |
-| **Ask the agent a throwaway question** — *"and while that's going, can you still hear me?"* | **It answers, fast.** The conversational path is on `gemini-2.5-flash-lite`, a different model and a different quota bucket, so it is unaffected by the slow read. **This is the single best discriminator you have**, and it is the whole payoff of the split architecture (§0.2). | **Silence.** The session or the network is gone, not the model. Stop waiting and go to recovery. |
+| **Ask the agent a throwaway question** — *"and while that's going, can you still hear me?"* | **It answers, fast — about two seconds.** The conversational path is the same `gemma-4-26b-a4b-it` and the same quota bucket as the read (§0.2), so a fast answer tells you the session, the tunnel and the model are all healthy and whatever is wrong is in the `read_document` handler or the frame. **This is still the single best discriminator you have.** | **Silence.** The session or the network is gone, not the model. Stop waiting and go to recovery. |
 | **Tunnel terminal** (`Alt`+`Tab` 4, §5.1) | Shows the inbound request, no response yet. | Shows a disconnect, or no inbound request at all — the latter means the webhook never arrived. |
-| **Backend terminal** (`Alt`+`Tab` 3) | One in-flight Gemma request, waiting. | A 500/429 and a retry in progress (fine, but add 20–57 s to your estimate), or a traceback (go to recovery). |
+| **Backend terminal** (`Alt`+`Tab` 3) | One in-flight Gemma request, waiting. | A 429 and a retry in progress (fine, but add a few seconds to your estimate), or a traceback (go to recovery). |
 
 **Use the third row.** It is the only one that works from where you are standing, it costs five
 seconds, it sounds completely natural to the room, and it cleanly separates "the slow thing is slow"
@@ -632,12 +643,11 @@ usually restarts your tunnel, dropping you into failure #1.
 fixed and the model is proven at the API level; what is not proven is the application path to it.
 No network mitigation saves you from a `read_document` handler that has never returned a letter.
 
-**D2. The split model paths, actually implemented.** §0.2. This is a mitigation, not just an
-architecture note: if conversational turns still go to Gemma on the day, **every single turn costs
-20–57 s**, the agent cannot answer the throwaway question that §3.1a depends on, and you lose both
-the demo and your ability to diagnose it. `CHAT_MODEL=gemini-2.5-flash-lite` and
-`VISION_TIMEOUT_MS=90000` are staged commented-out in `.env.example`; they do nothing until the
-backend reads them.
+**D2. ~~The split model paths, actually implemented.~~ RETIRED — do not build it.** §0.2. Note 08 §10
+settled one model for both paths: 2.0 s median on text, 3.7–4.5 s on vision, inside
+`LLM_TIMEOUT_MS=8000`. `CHAT_MODEL` and `VISION_TIMEOUT_MS` stay commented out in `.env.example`.
+The diagnostic this item used to underwrite — asking the agent a throwaway question mid-read — still
+works; see §3.1a for what it now tells you.
 
 **D3. `thought: true` filtering in the backend.** §0.3. Three lines of Python standing between you
 and the agent reading four thousand characters of model deliberation aloud to the room.
@@ -655,41 +665,42 @@ first soft timeout is reached while waiting for LLM response." Section B's scrip
 timing on the agent saying *"let me read that for you, one moment"* at ≈0:14; `pre_tool_speech:
 "force"` is what makes that line actually happen.
 
-**This has gone from a polish item to a load-bearing one.** The pause it covers is no longer the
-twelve seconds the original script assumed — it is **20–57 seconds** (§0.2). Without that spoken
-line you are standing in up to a minute of unexplained silence with nothing to point at, and
-§3.1a's first and best discriminator ("did the line play?") does not exist. It is also an
-**accessibility** requirement (§4.5): silence tells a blind user nothing, and forty-five seconds of
-it tells them the product is broken. `soft_timeout_config.message` is worth setting as a second
-layer for the same reason — a 45-second wait justifies a second reassurance partway through, not
-just one at the start.
+**It is a polish item with an accessibility floor under it.** The pause it covers is **3.7–4.5
+seconds** (§0.2), not the twenty to sixty we briefly budgeted for. Set it anyway: four seconds of
+silence tells a sighted user "it's thinking" and a blind user nothing, and §3.1a's first and best
+discriminator ("did the line play?") only exists if the line plays. `soft_timeout_config.message` is
+no longer needed as a second reassurance — a four-second wait does not warrant one — but it costs
+nothing to configure as a safety net for a degraded network.
 
-**G. Get the two timeouts and the frame payload right.** This one has changed substantially.
+**G. Get the timeout and the frame payload right.** This one has changed substantially, twice.
 
-`[REPO]` `.env.example` sets `LLM_TIMEOUT_MS=8000`, and under the split-path architecture (§0.2)
-**that value is now the *chat* budget only** — correct for a conversational turn on
-`gemini-2.5-flash-lite`, and still correctly sitting inside the webhook timeout so the backend fails
-first and you control the failure message. `[RESEARCH]` Note 03 §7.1 gives the webhook
+`[REPO]` `.env.example` sets `LLM_TIMEOUT_MS=8000`, and since note 08 §10 retired the split-path
+architecture (§0.2) **that value is the single budget for every model call** — comfortable for a
+conversational turn on `gemma-4-26b-a4b-it` at a 2.0 s median, tight but workable for a 3.7–4.5 s
+vision read, and still correctly sitting inside the webhook timeout so the backend fails first and
+you control the failure message. `[RESEARCH]` Note 03 §7.1 gives the webhook
 `response_timeout_secs` default as **20 s** (range 5–300), re-confirmed in the verification pass as
 claim 13.
 
-**But the 20 s webhook default is now shorter than a *healthy* `read_document` call.** Measured
-Gemma latency is 19.9–56.8 s (§0.2), so left at the default the platform times the tool out before
-the model has answered, on every single read. The ordering that has to hold is:
+**And the 20 s webhook default is comfortably longer than a healthy `read_document` call.** Measured
+latency on the pinned `gemma-4-26b-a4b-it` is 3.7–4.5 s on vision and 2.0 s median on text (§0.2),
+and `LLM_TIMEOUT_MS=8000` is the single budget for every model call. The ordering that has to hold
+is:
 
 ```
-VISION_TIMEOUT_MS (90 s)  <  read_document response_timeout_secs (≥120 s)
-LLM_TIMEOUT_MS    (8 s)   <  every other tool's response_timeout_secs (20 s default, fine)
+LLM_TIMEOUT_MS (8 s)  <  every tool's response_timeout_secs (20 s default, fine everywhere)
 ```
 
-**Raise `response_timeout_secs` to ≥120 on the `read_document` webhook tool only.** Leave the others
-alone. `docs/submission.md` Section D carries the same line.
+**Leave `response_timeout_secs` at the default on every tool.** The ≥120 s figure in earlier drafts
+was derived from `gemma-4-31b-it` and is superseded by note 08 §10; `docs/submission.md` Section D
+carries the same correction.
 
-`[CALC]` **Payload size still matters, but it is no longer the big number.** On a saturated
+`[CALC]` **Payload size is the big number again.** On a saturated
 conference uplink of ~2 Mbps a 1.5 MB full-resolution frame takes **~6 seconds to upload before the
 model sees anything**, and `[RESEARCH]` note 07 §2.4 notes base64 inflates bytes by ~4/3 on top of
-that. Against a 20–57 s model call those 6 seconds are now 10–30 % of the wait rather than most of
-it — still worth removing, no longer the thing to optimise first. Downscale and JPEG-compress
+that. Against a 3.7–4.5 s model call (§0.2) those 6 seconds are once again **more than half the wait** —
+which makes client-side downscaling the single biggest latency win left on the read path, not an
+afterthought. Downscale and JPEG-compress
 client-side: long edge ~1280 px, quality ~80, **target ≤ 250 KB**, keep it in colour (letterhead
 colour is real signal). `[RESEARCH]` Note 08 §3 confirms `inline_data` base64 works in a single
 round trip, so there is no Files API hop to budget for. Balance this against the `mediaResolution`
@@ -702,11 +713,11 @@ trip. It validates the whole chain — tunnel, agent config, webhook secret, vis
 filtering, audio out — at the last possible moment, and it gives you one real latency sample for
 tonight's network.
 
-`[RESEARCH]` **It will not warm anything.** The latency is generation-bound, not cold-start: note 08
-§1.2 attributes the 56.8 s vision call to the 1,109 thought tokens it emitted for a 5-token answer.
-The second call costs what the first one cost. Do the warm run for validation, and do **two** of
-them if you have time — at a ~50 % failure rate a single success tells you much less than you think
-it does, and a single failure tells you almost nothing (note 08 §6: *"never conclude a capability is
+`[RESEARCH]` **It will not warm anything, and it no longer needs to.** Note 08 §1.2 raised the
+"latency is thinking tokens" hypothesis and then killed it — a `thinkingLevel: "minimal"` probe with
+zero thought characters still took 36.2 s on `gemma-4-31b-it`, so the model was the whole variable.
+On the pinned 26b a read is 3.7–4.5 s first attempt (§10). One warm run is enough for validation;
+do a second if you have time, since the free tier is 30 RPM and a 429 is now the likeliest failure (note 08 §6: *"never conclude a capability is
 unsupported from 5xx alone"*).
 
 **I. A canned/mock path.** `[RESEARCH]` Two documented routes:
@@ -721,10 +732,9 @@ unsupported from 5xx alone"*).
 remove the ElevenLabs session, which still needs the network. It covers "the vision call is slow or
 down". It does not cover "the wifi is dead". For that, only B works.
 
-**It has, however, been promoted.** With a 20–57 s read at a ~50 % failure rate (§0.2), the mock is
-no longer only a break-glass option — `docs/submission.md` Section B lists it as **option C**, a
-legitimate way to fit a short slot, and it is the *only* way the 30-second cut-down can exist at
-all. **The condition is disclosure:** one spoken sentence — *"the vision call is stubbed here so I
+**It has, however, been demoted again.** At 3.7–4.5 s and 19/19 with no 5xx (§0.2), the mock is back
+to being a break-glass option for a dead network rather than a timing strategy —
+`docs/submission.md` Section B no longer needs option C, and the 30-second cut-down can be run live. **The condition is disclosure:** one spoken sentence — *"the vision call is stubbed here so I
 fit the slot; come to the table and I'll run it live"* — and it is completely fine. Undisclosed, in
 a public repo, in front of judges, it is not. Build the flag, and build the sentence into the card
 next to it.
@@ -839,7 +849,7 @@ a feature". `docs/submission.md` Section D already has the equivalent line for `
 | Text resizes to 200% without loss; reflows at 320 CSS px | WCAG 1.4.4 / 1.4.10. Directly relevant because you may hit `Ctrl` `+` on stage. |
 | No information available only on hover | WCAG 1.4.13 — and nobody can see your hover on a projector. |
 | **`[RESEARCH]` Set `turn_eagerness: "patient"` and a generous `turn_timeout`** | Note 04 §7.2: `turn_timeout` is seconds, range 1–30, and the docs warn shorter timeouts "may interrupt users who need more time to respond". A low-vision user fumbling a sheet of paper **is** slow. An assistive product that talks over a hesitant user fails its own brief. |
-| **The agent must narrate its own waiting — and the wait is 20–57 seconds** | §0.2. Several seconds of silence tells a sighted user "it's thinking" and a blind user nothing; **forty-five seconds of it tells a blind user the product is broken**, and they have no screen to check. `pre_tool_speech: "force"` (§3.3F) fixes the accessibility problem and the latency problem with one config change. For a wait this long, also set `soft_timeout_config.message` so there is a second reassurance partway through, and make sure the on-screen `Reading your letter…` state is in the polite live region (§4.1) — it is state the agent does not speak, so there is no double-speak conflict. |
+| **The agent must narrate its own waiting — the wait is 3.7–4.5 seconds** | §0.2. Even four seconds of silence tells a sighted user "it's thinking" and a blind user nothing, and they have no screen to check. `pre_tool_speech: "force"` (§3.3F) fixes it with one config change. `soft_timeout_config.message` is no longer needed as a mid-wait reassurance, but keep the on-screen `Reading your letter…` state in the polite live region (§4.1) — it is state the agent does not speak, so there is no double-speak conflict. |
 | **Never let the agent speak the model's reasoning** | §0.3. If `thought: true` parts are not filtered, the agent reads 4,236 characters of deliberation aloud. For a sighted user that is embarrassing; for a blind user it is actively harmful — there is no visual cue that what they are hearing is not their letter, and the spoken content contains plausible-sounding wrong answers the model is in the middle of discarding. This is the single worst accessibility failure the build can ship. |
 
 ### 4.6 What to actually test, and how
@@ -863,31 +873,36 @@ checklist. This one is timed and goes wider.
 
 ### T-60 minutes — at the venue, on the venue network
 
-- [ ] **Confirm the model pin is `gemma-4-31b-it` in both `.env.example` and `.env.local`, and get
-      one real 200 back *through the backend* with a letter image.** (§0.1 — nothing else in this
-      list matters if this is wrong. Note the ID: `gemma-4-26b-a4b-it` was the old recommendation
-      and is superseded; vision is verified on 31b.)
+- [ ] **Confirm the model pin is `gemma-4-26b-a4b-it` in both `.env.example` and `.env.local`, and
+      get one real 200 back *through the backend* with a letter image.** (§0.1 — nothing else in this
+      list matters if this is wrong. Note the ID: `gemma-4-31b-it` was the interim pin and is
+      superseded; note 08 §10 verified vision on 26b across all three letters at 3.7–4.5 s.)
 - [ ] **Confirm the answer came back clean — not the model's scratchpad.** (§0.3. If the spoken
       result is long and rambling, `thought: true` filtering is missing and no retry fixes it.)
-- [ ] **Confirm a conversational turn comes back fast** — ask the agent anything and time it. If it
-      takes 20 s+, the chat path is still on Gemma, you have no split (§0.2), and §3.1a's best
-      diagnostic does not work.
-- [ ] **Confirm `read_document`'s webhook `response_timeout_secs` is ≥120**, not the 20 s default.
-      (§3.3G — the default is shorter than a healthy read.)
+- [ ] **Confirm a conversational turn comes back fast** — ask the agent anything and time it. Expect
+      ~2 s on `gemma-4-26b-a4b-it` (§0.2). If it takes 20 s+, check the pin: a turn that slow is the
+      signature of `gemma-4-31b-it`, not of a healthy build.
+- [ ] **Confirm `read_document`'s webhook `response_timeout_secs` is at the 20 s default**, and that
+      `LLM_TIMEOUT_MS=8000` is what actually fires first. (§3.3G — the ≥120 s figure was derived from
+      `gemma-4-31b-it` and is superseded.)
 - [ ] Laptop on mains. Hotspot phone charged, hotspot **on and joined once**.
 - [ ] Join venue wifi, **5 GHz**. Clear any captive portal.
 - [ ] Backend up. Tunnel up **on the reserved hostname**. `PUBLIC_BASE_URL` matches the URL
       configured on the ElevenLabs webhook tools.
 - [ ] `curl` the backend health endpoint **through the tunnel**, not locally.
-- [ ] **Two** full end-to-end runs with the real printed letter — not one. At a ~50 % failure rate
-      (§0.2) a single result tells you very little. Check `latency-*.jsonl` and write tonight's
-      actual numbers on your card; they are what you rehearse the narration against.
-      - **20–60 s is normal.** Do not switch networks over it — the latency is the model, not the
-        venue (§3.3H), and the hotspot will not be faster.
+- [ ] **Two** full end-to-end runs with the real printed letter — not one. One result is one
+      sample, and the figure you care about is end-to-end rather than note 08's model-call time.
+      Check `latency-*.jsonl` and write tonight's actual numbers on your card; they are what you
+      rehearse the narration against.
+      - **4–8 s is normal.** If a read takes 20 s+, suspect the pin first (`gemma-4-31b-it` looks
+        exactly like this) and the frame upload second — and unlike before, the venue network is now
+        a real suspect, because the model is no longer the dominant term (§3.3G).
       - **Switch to the hotspot if the *conversational* turns are slow**, or if the frame upload
-        itself is slow. Those are network. The read is not.
-      - If **both** runs fail outright, that is a ~25 % event on a healthy setup and a ~100 % event
-        on a broken one — do a third before concluding anything, and re-read §3.1a.
+        itself is slow. Those are network — and with the model down to ~4 s, the network is a bigger
+        share of the read than it used to be.
+      - If **both** runs fail outright, that is close to conclusive: the pinned model went 19/19
+        across note 08 §§6.1 and 10, so two failures is a broken setup, not bad luck. Check the pin,
+        the secret header and the tunnel before you blame the model, and re-read §3.1a.
 - [ ] If the session will not connect, test `webRtc.iceTransportPolicy: "relay"` (§3.3).
 - [ ] Walk to the **back of the room** and look at the projected screen. If you cannot read the
       caption line, fix it now with `Ctrl` `+`.
@@ -911,11 +926,12 @@ checklist. This one is timed and goes wider.
 - [ ] Both printed copies of letter 01 stacked, face up, on stiff card, within arm's reach.
 - [ ] Connection status reads **Connected**.
 - [ ] Do not disturb **on**. Phone silent — it is your hotspot, so silent, not off.
-- [ ] Section B script card in hand — **the reworked one**, with the hook moved to *during* the read
-      and only your chosen option (A, B or C) on it.
-- [ ] **Your abandon time written on the card: 75 seconds** from the agent's "let me read that for
-      you" (§3.1a). And the throwaway-question line — *"and while that's going, can you still hear
-      me?"* — written next to it, so you do not have to invent it under pressure.
+- [ ] Section B script card in hand — **the reworked one**, with the hook moved to *during* the read.
+      There is no longer an A/B/C choice: the 90-second script runs live, read included (§0.2).
+- [ ] **Your abandon time written on the card: 15 seconds** from the agent's "let me read that for
+      you" (§3.1a — a healthy read is 3.7–4.5 s and the backend fails at 8 s). And the
+      throwaway-question line — *"and while that's going, can you still hear me?"* — written next to
+      it, so you do not have to invent it under pressure.
 
 ### 5.1 What to have open, in what order
 
@@ -951,12 +967,12 @@ Section B has the per-segment lines. These are the cross-cutting ones it does no
 
 | X | Say Y | Then do |
 |---|---|---|
-| **Long silence after "let me read that for you"** | *(say nothing about it — keep narrating)* | **This is normal.** 20–57 s is the healthy range (§0.2). Work through your narration blocks. Use the throwaway question (§3.1a) if you need to check without stopping. **Cut at 75 s, not before.** |
-| **75 seconds and still nothing** | *"That one's not coming back — it fails about half the time on the free tier, which is exactly why the conversation doesn't depend on it."* | Second printed copy, flatter, closer. **One** retry — and know it costs another 20–57 s, so if you are already past time, go straight to the recording instead. |
+| **Long silence after "let me read that for you"** | *(say nothing about it — keep narrating)* | **3.7–4.5 s is the healthy range (§0.2), so past about ten seconds something is wrong.** Finish your narration block, use the throwaway question (§3.1a) to check without stopping. **Cut at 15 s, not later.** |
+| **15 seconds and still nothing** | *"That's not the model — a read comes back in about four seconds, measured. Something upstream has gone. Let me give it a cleaner shot."* | Second printed copy, flatter, closer. **One** retry — it costs about four seconds, so you can afford it. |
 | **You run out of things to say before the read lands** | *"I'll let that keep working while I tell you where this goes next —"* | Pivot to the "What's next" material (multi-page letters, a phone number, returning-sender memory). Have ~30 seconds of it ready. This is why Section B gives you three stoppable narration blocks. |
 | **Agent reads a long rambling monologue** about what it is thinking | *"That's the model's scratchpad leaking through — one for the backlog."* | Interrupt it immediately; barge-in is right there. **No retry fixes this** — it is unfiltered `thought: true` parts (§0.3), a backend bug. Go to the recording. |
 | Agent is **confidently wrong** about the letter | *"That's the failure we care most about — the read failed and the agent wasn't told. Let me show you what it does wired correctly."* | Switch to the recording. Naming the §3.2 footgun honestly reads far better than looking confused — and it is the exact thing the skill file exists to prevent. |
-| **Conversational turns are also slow** (the agent takes 20 s+ to answer anything, not just to read) | *"Conference wifi — give me one second."* | The chat path is not split, or the network is gone (§3.1a). Either way the demo is over as a live demo: go to the recording. Do not wait it out. |
+| **Conversational turns are also slow** (the agent takes 20 s+ to answer anything, not just to read) | *"Conference wifi — give me one second."* | The pin has reverted to `gemma-4-31b-it`, or the network is gone (§3.1a). Either way the demo is over as a live demo: go to the recording. Do not wait it out. |
 | Agent cuts off mid-word, then silence | *"Lost the voice session — live over conference wifi."* | One reconnect, ~5 s. Then the recording. |
 | Agent keeps cutting itself off | *(don't flag it)* | Audio feedback (§1.5). Drop the PA volume or go push-to-talk. |
 | Nothing responds, everything looks fine | *"Conference wifi. Switching to my hotspot."* | Switch. The reserved hostname means the tool URL survives. |
@@ -977,23 +993,26 @@ second opinion.
 
 0a. ⟳ **Filter `thought: true` parts.** Three lines. Without them the agent reads 4,236 characters of
    model deliberation aloud to a blind user. (§0.3)
-0b. ⟳ **Implement the split model paths** — `CHAT_MODEL=gemini-2.5-flash-lite` for conversation,
-   `gemma-4-31b-it` + `VISION_TIMEOUT_MS=90000` for `read_document`. Staged commented-out in
-   `.env.example` and inert until the backend reads them. (§0.2)
+0b. ✅ **Do NOT implement the split model paths.** Note 08 §10 retired them: `gemma-4-26b-a4b-it`
+   serves conversation (2.0 s median, 8/8) and vision (3.7–4.5 s, 3/3) inside the one
+   `LLM_TIMEOUT_MS=8000` budget. `CHAT_MODEL` and `VISION_TIMEOUT_MS` stay commented out in
+   `.env.example`. (§0.2)
 0c. ⟳ **Strip markdown fences before parsing, and validate server-side.** `responseSchema` returns
    200 and is silently ignored. (§0.4)
 0d. ⟳ **Serial requests, mandatory retries, honour `RetryInfo.retryDelay` as a floor.** (§0.2)
 
 **Before demo day, config only, highest value per minute:**
 
-1. ⟳ **The Gemma model pin — ✅ already fixed** to `gemma-4-31b-it` in `.env.example`. Confirm
+1. ⟳ **The Gemma model pin — ✅ already fixed** to `gemma-4-26b-a4b-it` in `.env.example`. Confirm
    `.env.local` matches, then get one real 200 *through the backend*. (§0.1)
 2. ⟳ `tool_error_handling_mode: "summarized"` on every webhook tool. **Prevents the agent inventing a
-   letter summary when `read_document` fails** — and with a ~50 % failure rate it *will* fail. (§3.2)
-3. ⟳ `pre_tool_speech: "force"` on `read_document`. Load-bearing now, not polish: it is the only
-   thing covering a 20–57 s silence. (§3.3F, §4.5)
-3b. ⟳ **`response_timeout_secs` ≥ 120 on the `read_document` webhook tool.** The 20 s default is
-   shorter than a healthy read and will time out every single one. (§3.3G)
+   letter summary when `read_document` fails** — rarer now that the pin went 19/19 (note 08 §§6.1,
+   10), but a hidden failure is still the worst thing this build can do. (§3.2)
+3. ⟳ `pre_tool_speech: "force"` on `read_document`. Still do it — it covers a 3.7–4.5 s silence and
+   is an accessibility requirement rather than a latency workaround. (§3.3F, §4.5)
+3b. ✅ **Leave `response_timeout_secs` at the 20 s default.** A healthy read is 3.7–4.5 s and
+   `LLM_TIMEOUT_MS=8000` fires first, so the backend still controls the failure message. The ≥120 s
+   figure came from `gemma-4-31b-it` and is superseded. (§3.3G)
 4. ⟳ Enable `interruption` under Advanced → Client Events — **and add `agent_chat_response_part`**,
    which is off by default in voice conversations and silently kills captions. (§4.4)
 5. `turn_eagerness: "patient"` with a generous `turn_timeout`. (§4.5)
@@ -1004,18 +1023,17 @@ second opinion.
 **Code:**
 
 8. `.env.local`: add `http://localhost:4173` to `CORS_ORIGINS` if presenting from `vite preview`. (§1.3)
-9. Keep `LLM_TIMEOUT_MS=8000` as the **chat** budget and give `read_document` its own
-   `VISION_TIMEOUT_MS=90000`; downscale frames to ≤250 KB before upload. (§3.3G. The old advice here
-   was "`LLM_TIMEOUT_MS=12000` for demo day" — that is superseded: 12 s is still below every
-   successful Gemma call ever measured, and raising the shared value would have slowed the
-   conversational path for no benefit.)
+9. Keep `LLM_TIMEOUT_MS=8000` as the **single** budget for every model call — 2.0 s median on text,
+   4.5 s worst case on vision (§§6.1, 10) — and do not add `VISION_TIMEOUT_MS`. Downscale frames to
+   ≤250 KB before upload; at a 4 s model call the upload is the dominant term again (§3.3G). (Note
+   08 §10 also allows that ~15000 would be a safer margin on the vision path if you want one.)
 10. ⟳ `frontend/index.html`: `<title>LetterLens</title>`. (§4.2)
 11. A `?demo=1` root font-size override rather than restyling everything. (§1.1)
 12. A `?mock=1` flag setting `toolMockConfig: { mockingStrategy: "selected", mockedToolNames: ["read_document"] }`. (§3.3I)
 13. An "upload a photo instead" input path — product feature and lighting/network fallback in one. (§2.3)
-13b. A persistent, large, on-screen **`Reading your letter…`** state that stays up for the whole
-    20–57 s call, in the polite live region. It is what makes a long pause legible as work, both to
-    the room and to a screen-reader user. (§0.2, §3.1a, §4.1)
+13b. A clear on-screen **`Reading your letter…`** state for the duration of the call — 3.7–4.5 s
+    (§0.2) — in the polite live region. Short as it is, it is what makes the pause legible as work to
+    a screen-reader user. (§0.2, §3.1a, §4.1)
 
 **`test-letters/generate.py` (not modified here — and ⚠️ *apparently already modified by someone
 else*: `DPI = 300`, `W, H = 2480, 3508` and an overflow check are now in the file, so items 16 and
@@ -1042,9 +1060,10 @@ Per instruction, **`.env.local` was not read** and no key value appears anywhere
 `docs/research/03-elevenlabs-server-tools-and-variables.md` (§§1.3, 1.4, 7, 8, plus the independent
 verification pass added in `39b8655`), `docs/research/04-elevenlabs-react-sdk.md` (§§3.4, 6.4, 6.6,
 7.1, 7.2, 9.1, 9.2, 9.3, 10), `docs/research/07-gemini-vision-and-structured-output.md` (§§2.4, 2.6),
-and `docs/research/08-gemma-live-api-test-results.md` (§§1, 1.1, 1.2, 2, 3, 4, 5, 6, 6.1, 7, 8, 8.1)
-— the last of which is **live HTTP against a real key rather than documentation**, and which
-supersedes note 01 on the model pin, the image transport and the latency budget. Where this file and
+and `docs/research/08-gemma-live-api-test-results.md` (§§1, 1.1, 1.2, 2, 3, 4, 5, 6, 6.1, 7, 8, 8.1,
+8.3, 10) — the last of which is **live HTTP against a real key rather than documentation**, and which
+supersedes note 01 on the model pin and the image transport while, in §10, confirming rather than
+overturning the 8-second latency budget. Where this file and
 note 01 disagree, note 08 wins; the places that changed are called out inline (§§0.1, 0.2, 2.4,
 3.3G, Appendix A item 9).
 

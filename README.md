@@ -49,7 +49,7 @@ As of 2026-10-03: the research, agent design and skill are done; the application
 
 **Done** — agent persona and tool inventory · `letter-reader` Agent Skill + output schema · eight verified research notes · Gemma vision verified end-to-end against all three test letters with a live key · three synthetic test letters with expected extractions · pinned config · no keys in the repo.
 
-**Not yet** — `backend/` is `requirements.txt` only (no entrypoint) · `frontend/` is close to the stock Vite scaffold · `agent/*.json` does not exist · `CHAT_MODEL`/`VISION_TIMEOUT_MS` are commented out and inert · the accessibility work has no UI to apply to yet.
+**Not yet** — `backend/` is `requirements.txt` only (no entrypoint) · `frontend/` is close to the stock Vite scaffold · `agent/*.json` does not exist · the accessibility work has no UI to apply to yet. (`CHAT_MODEL`/`VISION_TIMEOUT_MS` are not pending work: note 08 §10 retired the split path, and they stay commented out on purpose.)
 
 <!-- TODO(human): demo GIF/screenshot and video link once the frontend runs. -->
 <!-- TODO(human): measured p50/p95 for read_document end-to-end. Do not publish an unmeasured figure. -->
