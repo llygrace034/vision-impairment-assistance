@@ -117,7 +117,7 @@ export default function App() {
   const statusLine = reading
     ? "Reading the letter…"
     : isSpeaking
-      ? "LetterLens is speaking…"
+      ? "EasyRead is speaking…"
       : connected
         ? "Listening — hold up a letter and ask what it says"
         : status === "connecting"
@@ -126,7 +126,7 @@ export default function App() {
 
   return (
     <main className="app">
-      <h1>LetterLens</h1>
+      <h1>EasyRead</h1>
 
       <div className="viewport">
         <video ref={videoRef} autoPlay playsInline muted aria-label="Camera preview" />
