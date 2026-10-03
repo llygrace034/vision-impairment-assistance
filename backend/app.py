@@ -212,8 +212,8 @@ async def read_document(image: UploadFile = File(...)) -> dict:
     for i, model in enumerate(models):
         used = model
         req = dict(body)
-        if not model.startswith("gemma-4"):
-            # thinkingLevel is a Gemma 4 field; other models reject or ignore it.
+        if not model.startswith("gemma"):
+            # thinkingLevel is a Gemma field; Gemini models reject or ignore it.
             req = {k: v for k, v in body.items() if k != "generationConfig"}
         try:
             async with httpx.AsyncClient(timeout=primary_timeout if i == 0 else VISION_TIMEOUT) as client:
