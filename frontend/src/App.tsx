@@ -1,35 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useConversation } from "@elevenlabs/react";
+import { prepareFrame } from "./capture";
 import "./App.css";
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:8000";
-
-// The frame the agent reads is downscaled to this width before upload. Full
-// resolution buys no accuracy: 1024px read all three test letters correctly,
-// reference numbers and times included.
-const CAPTURE_WIDTH = 1024;
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [lastRead, setLastRead] = useState<string | null>(null);
+  const [lastFrame, setLastFrame] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
 
-  /** Grab the current video frame as a downscaled JPEG. */
+  /**
+   * Grab the best of a short burst of frames, crop it to the paper and fix
+   * the levels (see capture.ts). Paper under room light is dim and low
+   * contrast and fills a third of the frame; a phone screen is neither, which
+   * is why the phone read and the paper did not before this.
+   */
   const captureFrame = useCallback(async (): Promise<Blob | null> => {
     const video = videoRef.current;
-    if (!video || !video.videoWidth) return null;
-
-    const scale = CAPTURE_WIDTH / video.videoWidth;
-    const canvas = document.createElement("canvas");
-    canvas.width = CAPTURE_WIDTH;
-    canvas.height = Math.round(video.videoHeight * scale);
-    canvas.getContext("2d")!.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    return new Promise((resolve) =>
-      canvas.toBlob((b) => resolve(b), "image/jpeg", 0.75),
-    );
+    if (!video) return null;
+    const prepared = await prepareFrame(video);
+    if (!prepared) return null;
+    setLastFrame((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return URL.createObjectURL(prepared.blob);
+    });
+    return prepared.blob;
   }, []);
 
   /**
@@ -154,6 +153,9 @@ export default function App() {
       {lastRead && (
         <section className="transcript" aria-label="What the camera read">
           <h2>Last read</h2>
+          {lastFrame && (
+            <img className="sent-frame" src={lastFrame} alt="The frame that was sent to the reader" />
+          )}
           <pre>{lastRead}</pre>
         </section>
       )}
