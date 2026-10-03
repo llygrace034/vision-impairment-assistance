@@ -1029,3 +1029,309 @@ separate.
 | Q8 | Function names/schemas for `play_keypad_touch_tone`, `update_state`, `flag_issue_for_review` | Enable each and read the `tools` array from the echo proxy. |
 
 **All eight are answered by one echo proxy.** Build that first.
+
+---
+
+## Independent verification (adversarial pass)
+
+**Verified 2026-10-03 by a second agent.** Every page below was re-fetched with `curl -sSL <url>.md`
+in this pass — the original note's cited URLs were **not** taken on trust. Method confirmed: WebFetch
+returns an LLM summary of elevenlabs.io docs, so all quotes here came from curl, same as the original.
+
+### Pages re-fetched independently in this pass
+
+| URL | HTTP | Bytes |
+|---|---|---|
+| https://elevenlabs.io/docs/eleven-agents/customization/llm/custom-llm.md | 200 | 30,036 |
+| https://elevenlabs.io/docs/api-reference/agents/create.md | 200 | 177,521 |
+| https://elevenlabs.io/docs/eleven-agents/customization/llm/custom-llm/groq-cloud.md | 200 | 4,691 |
+| https://elevenlabs.io/docs/eleven-agents/customization/llm/custom-llm/cloudflare.md | 200 | 5,472 |
+| https://elevenlabs.io/docs/eleven-agents/customization/llm/custom-llm/together-ai.md | 200 | 4,741 |
+| https://elevenlabs.io/docs/eleven-agents/customization/llm/custom-llm/samba-nova-cloud.md | 200 | 6,055 |
+| https://elevenlabs.io/docs/eleven-agents/customization/llm/llm-cascading.md | 200 | 3,206 |
+| https://elevenlabs.io/docs/eleven-agents/customization/conversation-flow.md | 200 | 17,094 |
+| https://elevenlabs.io/docs/eleven-agents/customization/tools.md | 200 | 1,684 |
+| https://elevenlabs.io/docs/eleven-agents/customization/tools/system-tools.md | 200 | 12,778 |
+| https://elevenlabs.io/docs/eleven-agents/customization/tools/client-tools.md | 200 | 12,776 |
+| https://elevenlabs.io/docs/eleven-agents/customization/tools/webhook-tools.md | 200 | 20,741 |
+| https://elevenlabs.io/docs/eleven-agents/customization/tools/system-tools/flag-issue-for-review.md | 200 | 3,051 |
+| https://elevenlabs.io/docs/eleven-agents/phone-numbers/twilio-integration/custom-llm-integration.md | 200 | 20,286 |
+| https://elevenlabs.io/docs/llms.txt | 200 | 215,130 |
+| https://elevenlabs.io/docs/llms-full.txt | 200 | 215,130 |
+| https://elevenlabs.io/docs/changelog/2026/1/12.md and .../2026/7/20.md | 200 | — |
+| https://raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml | 200 | 3,965,398 |
+
+`llms.txt` and `llms-full.txt` are **byte-identical** — independently confirmed by md5:
+both `f53bc31a90c36d7d4775c20d0d855616`. The original note's warning stands.
+
+### Claim-by-claim status
+
+| # | Claim | Status | Note |
+|---|---|---|---|
+| 1 | custom-llm page live, 30,036 bytes; `/docs/eleven-agents/...` canonical; old paths redirect | **CONFIRMED** | Byte count matches exactly. Both `/docs/conversational-ai/customization/llm/custom-llm` and `/docs/agents-platform/customization/llm/custom-llm` return **HTTP 308** to `https://elevenlabs.io/docs/eleven-agents/customization/llm/custom-llm`. Page heading `# Integrate your own model`. |
+| 2 | OpenAI-compatible: Chat Completions or Responses; POST | **CONFIRMED** | Quote exact. All handlers `@app.post(...)` / `app.post(...)`. |
+| 3 | SSE, `text/event-stream`, `data: {json}` framing, ends with the `[DONE]` sentinel | **CONFIRMED** | Both sentences verbatim. |
+| 4 | ElevenLabs appends the path; you configure a BASE url; four provider base URLs | **UNVERIFIABLE (headline) / CONFIRMED (the four values)** | See correction C1. |
+| 5 | Create-agent ref calls the field `url` — "The URL of the Chat Completions compatible endpoint" | **CONFIRMED** | Verbatim. The conflict with the provider guides is real. |
+| 6 | CustomLLM schema: `url`, `model_id`, `api_key`, `auth_connection`, `request_headers`, `api_version`, `api_type` enum | **CONFIRMED** | All seven fields, their descriptions and the three enum values verbatim. |
+| 7 | Auth header name never stated; Bearer inferred from `auth_connection` plus four provider guides | **CONFIRMED** | Zero occurrences of "Authorization" in custom-llm.md. `auth_connection` quote verbatim. All four provider curls use `Authorization: Bearer`. New supporting evidence in A5. |
+| 8 | ElevenLabs sends `user_id`, not `user`; examples rename before forwarding | **CONFIRMED** | Python `oai_request["user"] = oai_request.pop("user_id")` and TS `oaiRequest.user = oaiRequest.user_id; delete oaiRequest.user_id;` both verbatim, in all three Python variants. |
+| 9 | `elevenlabs_extra_body` wire field; declare-read-pop; client SDK field is `extra_body` | **CONFIRMED** | Verbatim, including the pop guard. Asymmetry real. |
+| 10 | `custom_llm_extra_body` (boolean, default false) gates it | **CONFIRMED, nesting CORRECTED** | Field verbatim. See C2 — the note's guessed path had one level too many. |
+| 11 | Verbatim request body: `stream: true`, system as messages[0], assistant turn, `model`, `temperature`, `max_tokens`, `elevenlabs_extra_body` | **CONFIRMED** | JSON matches character for character. No non-streaming mode documented. "Limit token usage" to 5000 confirmed. |
+| 12 | System tools auto-included in `tools`; must support function calling | **CONFIRMED** | Both quotes verbatim. |
+| 13 | Six system tool function names plus required/optional params | **CONFIRMED** | All six exact, including `transfer_to_agent` with `agent_number` **required** and `reason` **optional**, and the "Transfer to human" heading mapping to `transfer_to_number`. |
+| 14 | Whether webhook/client tools are in `tools` is NOT documented | **CONFIRMED** | Independently re-verified: zero case-insensitive matches for "custom llm" or "custom_llm" in webhook-tools.md, client-tools.md or tools.md. system-tools.md mentions it only to say *system* tools are exposed. There is genuinely no sentence to quote. |
+| 15 | Architectural inference that all tool kinds must appear in `tools`; Groq quote; `"type": "client"` shape | **CONFIRMED as inference** | Groq sentence verbatim: "To make use of the full power of ElevenLabs agents you need to use a model that supports tool use and structured outputs." The `"type": "client"` config block is verbatim. The conclusion remains reasoning, correctly labelled. |
+| 16 | Only the non-streaming `{type, function}` form is documented; streamed tool-call deltas are not | **CONFIRMED** | Grep of custom-llm.md for `tool_calls` returns **zero** hits; the only `delta` reference is the reasoning sentence. |
+| 17 | `ChatCompletionMessageToolCallChunk` has `required: [index]` only | **CONFIRMED** | Verbatim at openapi.yaml line 41504. (Spec also carries `x-stainless-const: true` on `type`; cosmetic.) |
+| 18 | Stream envelope requires `[choices, created, id, model, object]`; per-choice `[delta, finish_reason, index]` | **CONFIRMED** | Verbatim at openapi.yaml line 44101 onward. Minor: only the **Python** buffer chunk hardcodes `1234567890`; the TS one uses `Math.floor(Date.now() / 1000)`. |
+| 19 | `usage` not required; present only with `include_usage`; no `stream_options` in EL bodies | **CONFIRMED** | Spec quote verbatim; spec also confirms `choices` "can also be empty for the last chunk" under include_usage. No `stream_options` anywhere in custom-llm.md. |
+| 20 | Echo inbound `model`; the buffer id differs from later ids, so EL tolerates a changing id | **CONFIRMED** | Both examples use `model: request.model` with id `chatcmpl-buffer`. Validation of `model` remains unconfirmed, as stated. |
+| 21 | No documented first-token or total-response timeout for a custom LLM | **CONFIRMED** | Zero occurrences of "timeout" in custom-llm.md. Independent site-scoped search surfaced only `cascade_timeout_seconds` and soft timeout. **But see C3 — this is a bigger risk than the note implies.** |
+| 22 | Retry documented: same custom LLM retried, at least 3 attempts, no fallback; failures include errors/timeouts/empty | **CONFIRMED** | All three quotes verbatim from llm-cascading.md. |
+| 23 | `cascade_timeout_seconds` (default 4, range 2-15) does **not** apply to custom LLMs | **REFUTED (the conclusion)** | See C3. The field exists exactly as quoted, but "does not apply" is undocumented and the schema placement argues against it. |
+| 24 | SoftTimeoutConfig defaults; "Fires every timeout_seconds until the LLM streams content" | **CONFIRMED, source CORRECTED** | All quotes verbatim — but from **api-reference/agents/create.md**, not conversation-flow.md. See C4. |
+| 25 | Buffer words with ellipsis plus space; the extra space is a real requirement | **CONFIRMED** | Verbatim: "The extra space is crucial to ensure that the subsequent content is not appended to the "..." which can lead to audio distortions." |
+| 26 | Reasoning returned separately; `reasoning` / `reasoning_content` deltas; `enable_reasoning_summary` | **CONFIRMED** | All quotes verbatim. `enable_reasoning_summary` additionally confirmed in create.md: *"(boolean, optional, default: false) — Enable model reasoning summaries. When disabled, we do not request summaries from provider if possible for faster TTFB. Not ZRM compatible."* |
+| 27 | Twilio "Custom LLM integration" is a different feature (Speech Engine brain WebSocket) | **CONFIRMED, one sub-claim CORRECTED** | The page states the distinction explicitly. But the mapping to `api_type: "websocket"` is **not documented** — see C5. |
+
+### Corrections
+
+**C1 — "ElevenLabs appends the path" is inference, not documentation.**
+The four base URLs are verbatim-exact as recorded (re-verified individually):
+
+- Groq: `https://api.groq.com/openai/v1` — curl endpoint `https://api.groq.com/openai/v1/chat/completions`
+- Together: `https://api.together.xyz/v1` — curl `https://api.together.xyz/v1/chat/completions`
+- SambaNova: `https://api.sambanova.ai/v1` — curl `-X POST https://api.sambanova.ai/v1/chat/completions`
+- Cloudflare: `https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/v1/` — curl `.../ai/v1/chat/completions`
+
+But a full-text search across custom-llm.md and all four provider guides found **no sentence stating
+that ElevenLabs appends `/chat/completions`, and no normalisation rule**. The only hit for "append" on
+the page is the buffer-words sentence about the ellipsis. So the append behaviour is sound inference
+from four worked examples, not a documented contract. Treat Q3 in section 9 as genuinely open.
+(Also noted: the Cloudflare page has a typo in its own prose — `.../accounts/{ACCOUNT_ID}c/ai/v1/`,
+stray `c`.)
+
+**C2 — the `custom_llm_extra_body` nesting path is one level shallower than the note guessed.**
+The note proposed
+`platform_settings.overrides.conversation_initiation_client_data_config.custom_llm_extra_body`.
+That is wrong. `AgentPlatformSettingsRequestModel` has, verbatim:
+
+```
+- `overrides` (ConversationInitiationClientDataConfig-Input, optional) — Additional overrides for the agent during conversation initiation
+```
+
+`overrides` **is** the `ConversationInitiationClientDataConfig-Input`, so the correct path is:
+
+```
+platform_settings.overrides.custom_llm_extra_body = true
+```
+
+Source: https://elevenlabs.io/docs/api-reference/agents/create.md (`### AgentPlatformSettingsRequestModel`
+and `### ConversationInitiationClientDataConfig-Input`). The top-level body field is `platform_settings`
+(verbatim: *"`platform_settings` (AgentPlatformSettingsRequestModel, optional, nullable)"*).
+
+**C3 — `cascade_timeout_seconds` may well bound each custom-LLM attempt. Do not assume it is inert.**
+The note's reasoning was: cascading is bypassed for custom LLMs, therefore the cascade timeout does
+not apply. The schema placement contradicts that. In `### PromptAgentAPIModel-Input`, these are
+**siblings in the same object**:
+
+```
+- `custom_llm` (CustomLLM, optional, nullable) — Definition for a custom LLM if LLM field is set to 'CUSTOM_LLM'
+- `backup_llm_config` (PromptAgentApiModelInputBackupLlmConfig, optional) — Configuration for backup LLM cascading. Can be disabled, use system defaults, or specify custom order.
+- `cascade_timeout_seconds` (double, optional, default: 4) — Time in seconds before cascading to backup LLM. Must be between 2 and 15 seconds.
+```
+
+`cascade_timeout_seconds` is **not** nested inside `backup_llm_config` — it sits at the same level as
+`custom_llm`. Combined with llm-cascading.md's documented behaviour (on failure, *"retry the request
+with the same Custom LLM multiple times"*, where *"Failures can include API errors, **timeouts**, or
+empty responses"*), the most defensible reading is that **some per-attempt timeout exists and ~4s is
+the only documented number in the vicinity.** The changelogs describe the field as scoped to backup
+LLM config in prose — *"Added `cascade_timeout_seconds` configuration option for agent backup LLM
+configs"* (2026-01-12, default was then 8) and *"The default `cascade_timeout_seconds` changes from 8
+to 4 seconds"* (2026-07-20) — which is why this stays **unconfirmed either way**, not
+confirmed-applicable.
+
+**Build consequence:** do not design assuming an unbounded first-token budget. Target
+time-to-first-streamed-content **under ~2s**, and consider raising `cascade_timeout_seconds` toward
+its maximum (`15`) on the agent as cheap insurance. Settle it with the section 9 Q4 experiment (sleep
+N, bisect) — this is now a higher-priority experiment than the note implied, because a 4s cliff plus
+3-or-more retries is exactly how a slow proxy turns into triple-fired side effects.
+
+Sources: https://elevenlabs.io/docs/api-reference/agents/create.md ,
+https://elevenlabs.io/docs/changelog/2026/1/12.md , https://elevenlabs.io/docs/changelog/2026/7/20.md
+
+**C4 — soft-timeout attribution and two omissions.**
+Every `SoftTimeoutConfig` field quote in section 6 is verbatim correct, but it comes from
+**https://elevenlabs.io/docs/api-reference/agents/create.md** (`### SoftTimeoutConfig`), not from
+conversation-flow.md. conversation-flow.md carries the *dashboard* framing, and adds facts the note
+omitted:
+
+- Timeout duration — **Range `0.5` to `8.0` seconds**, **Recommended `3.0` seconds** (default `-1`,
+  disabled). So `timeout_seconds` is not free-range.
+- A direct internal contradiction: conversation-flow.md says *"Soft timeout triggers only once per
+  turn to prevent multiple fillers in succession."* while create.md's
+  `max_soft_timeouts_per_generation` says it *"Fires every timeout_seconds until the LLM streams
+  content or this limit is reached."* Treat more than one filler per turn as unreliable.
+- One field missing from the note's schema block: `llm_generated_message_prompt_override` (string,
+  optional, nullable).
+- Static message length is bounded: **1-200 characters**. LLM-generated fillers use *"recent
+  conversation context (up to 4 messages, 1000 characters)"* and *"A static fallback message is still
+  required when using LLM-generated messages."*
+
+Also confirmed: `soft_timeout_config` has override variants (`SoftTimeoutConfigOverride`,
+`SoftTimeoutConfigOverrideConfig`, `SoftTimeoutConfigWorkflowOverride`), so it is per-call overridable.
+
+**C5 — `api_type: "websocket"` is not a documented mapping to the Twilio/Speech-Engine page.**
+The Twilio page never mentions `api_type`. It says, verbatim:
+
+> The custom-LLM half is delivered by the [Speech Engine SDK](/docs/eleven-api/guides/cookbooks/speech-engine), which opens a WebSocket between ElevenLabs and your server so your LLM can stream responses back as the call unfolds.
+
+> * The **brain WebSocket** runs on your server. ElevenLabs connects to it to deliver transcripts and receive LLM-generated text.
+
+> This pattern uses the Speech Engine SDK, which uses a WebSocket connection to communicate between your server and the ElevenLabs API. You can also use the [Custom LLM](/docs/eleven-agents/customization/llm/custom-llm) guide, which uses an OpenAI-compatible HTTP endpoint instead of the Speech Engine SDK.
+>
+> The main difference between the two is WebSockets versus HTTP requests.
+
+So the note's **conclusion is right** (two distinct features, do not conflate) but the equation
+"Twilio page == `api_type` websocket" is an unsourced inference. Nothing ties the Speech Engine brain
+WebSocket to the `CustomLLM.api_type` enum. Source:
+https://elevenlabs.io/docs/eleven-agents/phone-numbers/twilio-integration/custom-llm-integration.md
+
+### What the researcher MISSED that the build will need
+
+**A1 — `update_state` and `play_keypad_touch_tone` DO have documented custom-LLM function names and
+argument schemas.** Section 5.2 marked these "UNCONFIRMED" and the stated blockers claim their
+contracts are unknown. That is **refuted**. system-tools.md documents both under the same "Custom LLM
+integration" section as the other six. Verbatim:
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "play_keypad_touch_tone",
+    "arguments": "{"reason": "Navigating to customer service", "dtmf_tones": "2"}"
+  }
+}
+```
+
+- `play_keypad_touch_tone` params: `reason` (string, **optional**) — "The reason for playing the DTMF
+  tones"; `dtmf_tones` (string, **required**) — *"The DTMF sequence to play. Valid characters: 0-9,
+  \*, #, w (0.5s pause), W (1s pause)"*.
+  (Note: ElevenLabs' own JSON example above has **unescaped inner quotes** — it is malformed JSON in
+  the docs. The real `arguments` value is a JSON **string**, so escape them.)
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "update_state",
+    "arguments": "{\"should_escalate\": true}"
+  }
+}
+```
+
+- `update_state` params are **dynamic**, verbatim: *"The function's parameters depend on how the tool
+  is configured. Each configured state update that uses an LLM-extracted value adds one property to
+  the schema, named after that update's dynamic variable and typed as `string`, `number`, or
+  `boolean`. State updates built only from constants or other dynamic variables don't add any
+  parameters."* Purpose: *"Let the agent update one or more dynamic variables based on the
+  conversation, without calling an external API."*
+
+Source: https://elevenlabs.io/docs/eleven-agents/customization/tools/system-tools.md
+So **eight** system tools have documented custom-LLM function-call formats, not six. Section 9 Q8 is
+largely already answered by the docs.
+
+**A2 — the note's quoted `BuiltInTools-Input` block is inaccurate.** Section 5.2 quotes it as starting
+at `end_call` and claims it contains `update_state` and `flag_issue_for_review`. The actual list,
+verbatim and complete (create.md `### BuiltInTools-Input`):
+
+```
+- `transfer_to_agent` (SystemToolConfig, optional, nullable) — The transfer to agent tool
+- `end_call` (SystemToolConfig, optional, nullable) — The end call tool
+- `language_detection` (SystemToolConfig, optional, nullable) — The language detection tool
+- `transfer_to_number` (SystemToolConfig, optional, nullable) — The transfer to number tool
+- `skip_turn` (SystemToolConfig, optional, nullable) — The skip turn tool
+- `play_keypad_touch_tone` (SystemToolConfig, optional, nullable) — The play DTMF tool
+- `voicemail_detection` (SystemToolConfig, optional, nullable) — The voicemail detection tool
+```
+
+Seven keys. `transfer_to_agent` was **dropped** from the note's quote; `update_state` and
+`flag_issue_for_review` were **added** and are **not present**. A "Flag issue for review" doc page does
+exist (https://elevenlabs.io/docs/eleven-agents/customization/tools/system-tools/flag-issue-for-review.md,
+HTTP 200, 3,051 bytes — *"Let a live agent raise a triage ticket for a problem it can't resolve,
+without interrupting the caller"*) but it contains **no function-call format and no parameter list**,
+and the string `flag_issue_for_review` appears **zero** times in llms.txt. So `flag_issue_for_review`
+is the only genuinely unknown custom-LLM tool contract.
+
+**A3 — the full config path to mount a custom LLM, which the note never records.**
+From create.md: body goes `conversation_config` (ConversationalConfigAPIModel-Input, **required**) to
+`agent` (AgentConfigAPIModel-Input) to `prompt` (PromptAgentAPIModel-Input) to `custom_llm` (CustomLLM).
+
+```
+conversation_config.agent.prompt.custom_llm = { url, model_id, api_key, api_type, ... }
+conversation_config.agent.prompt.llm        = "custom-llm"
+conversation_config.agent.prompt.cascade_timeout_seconds = 15   # see C3
+platform_settings.overrides.custom_llm_extra_body = true        # see C2
+```
+
+Endpoint: `POST https://api.elevenlabs.io/v1/convai/agents/create`. Nesting corroborated by
+system-tools.md's own SDK example:
+`conversation_config=ConversationalConfig(agent=AgentConfig(prompt={"built_in_tools": {...}}))`.
+Note also the regional base URLs listed on create.md (`api.us.`, `api.eu.residency.`,
+`api.in.residency.`, `api.sg.residency.`) if data residency matters.
+
+**A4 — enum-value trap: it is `custom-llm`, lowercase with a hyphen.** The `CustomLLM` field
+description says *"Definition for a custom LLM if LLM field is set to **'CUSTOM_LLM'**"*, but the
+actual `llm` enum value in `PromptAgentAPIModel-Input` is **`custom-llm`**. Sending `CUSTOM_LLM` will
+be rejected. Source: https://elevenlabs.io/docs/api-reference/agents/create.md
+
+**A5 — primary evidence that `request_headers` takes arbitrary header names.** The note called
+`request_headers` the "documented escape hatch" but had no example. The Twilio page supplies one
+(for the Speech Engine path, but it is the same `request_headers` concept), verbatim:
+
+```javascript
+  speechEngine: {
+    requestHeaders: { "x-api-key": process.env.SHARED_SECRET! },
+  },
+```
+
+> The `request_headers` block tells ElevenLabs to include `x-api-key: <shared-secret>` on every brain WebSocket connection — the brain server checks the header to ensure only your Speech Engine can reach it.
+
+This is the closest thing in the docs to a worked shared-secret auth pattern, and it confirms a
+**non-`Authorization`** header name is accepted by `request_headers`. Source:
+https://elevenlabs.io/docs/eleven-agents/phone-numbers/twilio-integration/custom-llm-integration.md
+
+Also: `CustomLlmApiKey` and `CustomLlmAuthConnection` have standalone schema sections in create.md,
+but `### CustomLlmRequestHeaders` is an **empty section** — the header value type is undocumented.
+
+**A6 — the Groq guide contradicts itself on model IDs.** It recommends *"the following Llama-3.3
+models"* in prose but the Server URL walkthrough says *"For the Model ID, specify
+`meta-llama/llama-4-scout-17b-16e-instruct`"*. For a self-hosted proxy this is moot (`model` is
+echoed), but do not copy a provider model ID from these pages without checking the provider.
+
+**A7 — OpenAI spec details worth having.** `ChatCompletionStreamResponseDelta` also carries a
+**deprecated** `function_call` property (omitted from the note's YAML quote) — do not emit it.
+`system_fingerprint` is `deprecated: true`; `obfuscation` is *"included by default and omitted when
+`stream_options.include_obfuscation` is `false`"*. The spec's own reference chunk example:
+
+```
+{"id":"chatcmpl-123","object":"chat.completion.chunk","created":1694268190,"model":"gpt-6-astra", "system_fingerprint": "fp_44709d6fcb", "choices":[{"index":0,"delta":{"role":"assistant","content":""},"logprobs":null,"finish_reason":null}],"obfuscation":"r4N7vQ2m"}
+```
+
+Source: https://raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml
+
+### Net verdict
+
+The original note is **unusually reliable**: every verbatim quote in it that this pass checked
+reproduced exactly, and its epistemic labelling (what is quoted vs. inferred vs. unconfirmed) was
+honest in all but the five cases in C1-C5. The build checklist in section 8 survives unchanged except
+for items 1, 11 and 12, which should pick up C1 (the append rule is unvalidated), C3 (assume a ~4s
+first-token cliff until measured) and C2 (the corrected
+`platform_settings.overrides.custom_llm_extra_body` path). The biggest real-world corrections are
+**C3** (a latency budget the note declared inapplicable may well apply) and **A1/A2** (two tool
+contracts the note declared unknown are in fact documented, and one tool it listed does not exist in
+the schema). The headline architectural unknown — whether non-system tools reach the custom LLM's
+`tools` array — is **independently confirmed as undocumented**, and the note's mitigation (pass
+`tools` through untouched, relay `tool_calls` verbatim) remains correct under either answer.

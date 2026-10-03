@@ -1617,3 +1617,256 @@ Hard rules learned here:
 - A verbatim REST example of `toolConfig.functionCallingConfig` for the legacy endpoint. **Not found** (§4.5 is a reconstruction).
 - Whether legacy `:streamGenerateContent?alt=sse` emits a `data: [DONE]` sentinel. **Not documented.**
 - Legacy Python streaming method name (`generate_content_stream`). **Not captured verbatim.**
+
+---
+
+## Independent verification (adversarial pass)
+
+**Verifier:** second agent, 2026-10-03. **Method:** every page below was re-fetched in this task. Where
+`WebFetch`'s summarising model gave inconsistent answers (it twice reported that `ai.google.dev/api/generate-content`
+contains *no* occurrences of the word "deprecated" — it contains 152), I downloaded the raw HTML with `curl`,
+stripped tags, and grepped the text directly. All verbatim strings below come from those stripped-text files.
+
+**Headline:** 26 of 28 claims CONFIRMED verbatim, 1 REFUTED (claim 25 — shut-down models listed as live),
+1 CONFIRMED-but-misleading (claim 27 — a verbatim image + JSON-mode REST example *does* exist and the note
+says none does). Two additional errors found in the note body (§2 snake_case claim; §1 model list).
+Three of the note's own open questions are now closed.
+
+### Verdict table
+
+| # | Verdict | Note |
+|---|---|---|
+| 1 | **CONFIRMED** | `<title>` of every `/generate-content/*` page ends `… \| Gemini Generate Content API (Legacy) \| Google AI for Developers` — verified on image-understanding, function-calling, structured-output, text-generation, api-errors. Verbatim sentence confirmed byte-for-byte. `/v1beta/interactions` confirmed on interactions-overview (see #28). |
+| 2 | **CONFIRMED** | Verbatim curl, endpoint, `x-goog-api-key` header and snake_case `inline_data`/`mime_type`/`data` all match. |
+| 3 | **CONFIRMED** | Both sentences verbatim. `file_data{mime_type,file_uri}` confirmed. |
+| 4 | **CONFIRMED** | MIME list, "maximum of 3,600 image files per request", 258-token/384px/768x768 all verbatim. |
+| 5 | **CONFIRMED** | `-w0` / `--input` / `-b 0` all present; raw base64, no `data:` prefix. |
+| 6 | **CONFIRMED** | Raw-text grep confirms `responseSchema (deprecated)` + `This item is deprecated!` + `Deprecated. Use responseFormat instead.`; `responseMimeType` carries no deprecation marker. See addition A1. |
+| 7 | **CONFIRMED** | REST/Python/Interactions shapes all verbatim. The note's warning that the doc's own curl has broken brace nesting is **correct** — verified (see A2). |
+| 8 | **CONFIRMED** | Subset list verbatim. `nullable` appears **0 times** on the structured-output page, and only inside the (deprecated) `Schema` proto on the reference page. |
+| 9 | **CONFIRMED** | Both verbatim sentences confirmed; `propertyOrdering` appears exactly once on the page, in the Gemini-2.0 footnote. |
+| 10 | **CONFIRMED** | `tools[].functionDeclarations[]` REST curl verbatim at three places on the page. |
+| 11 | **CONFIRMED** | Four modes, verbatim, in the order VALIDATED / AUTO / ANY / NONE, with VALIDATED described as "Default mode for tool combination (when built-in tools or structured outputs also enabled)". |
+| 12 | **CONFIRMED** | Grepped every occurrence of `toolConfig` / `functionCallingConfig` on the page: all are Python / JavaScript / Go SDK code. No REST block. The page's only REST curls are the three `functionDeclarations` ones plus a multimodal `functionResponse` one. The note's reconstruction is still a reconstruction. |
+| 13 | **CONFIRMED** | `{id,name,args}`, "Include this exact `id` in your `functionResponse`", `contents.push(response.candidates[0].content)` then `{role:'user',parts:[{functionResponse:…}]}`, and the comment "Extract tool call details, it may not be in the first part." — all verbatim. |
+| 14 | **CONFIRMED** | "passing back thought signatures is mandatory for function calling" verbatim; `MISSING_THOUGHT_SIGNATURE` = "Request has at least one thought signature missing." verbatim in the reference enum. |
+| 15 | **CONFIRMED** | `GenerateContentResponse` JSON representation matches field-for-field; "Returns no candidates at all only if there was something wrong with the prompt (check `promptFeedback`)" verbatim; `blockReason` = "If set, the prompt was blocked and no candidates are returned. Rephrase the prompt." verbatim; BlockReason enum is exactly the six values listed. |
+| 16 | **CONFIRMED** | All 22 enum values present, in exactly the claimed order, with the claimed descriptions. "If empty, the model has not stopped generating tokens." verbatim. |
+| 17 | **CONFIRMED** | All 11 fields present in exactly that order; `totalTokenCount` = "Total token count for the generation request (prompt + thoughts + response candidates)." verbatim. |
+| 18 | **CONFIRMED** | `:streamGenerateContent?alt=sse` + `--no-buffer` verbatim; "The request body is a JSON object that is identical for both standard and streaming modes"; sample chunks carry text **deltas** ("The image displays" then " the following materials:…"), one shared `responseId`, and `modelVersion` + `usageMetadata` on each chunk. |
+| 19 | **CONFIRMED** | `DONE` occurs **0 times** on the whole text-generation page. On the Interactions streaming page it occurs 4 times, as `data: [DONE]`. See addition A3. |
+| 20 | **CONFIRMED** | `pip install google-genai`; `google-generativeai` → "Not actively maintained"; "deprecated as of November 30th, 2025." verbatim. "GOOGLE_API_KEY takes precedence" verbatim on the api-key page. |
+| 21 | **CONFIRMED** | Live PyPI JSON re-fetched: `version` = `2.28.0`, `requires_python` = `>=3.10`, `summary` = `GenAI Python SDK`. |
+| 22 | **CONFIRMED** | Error body JSON identical field-for-field including both `details[]` entries; field table ("The gRPC status code in SCREAMING_CASE") verbatim; 400/402/403/404/429 rows verbatim, including "Don't retry this request: it won't succeed until credits are added." |
+| 23 | **CONFIRMED** | The 404 row's Example really is "An image, audio, or video file referenced in your request was not found." No bad-model-ID message or `reason` string appears anywhere on the page. The note's "medium" confidence is the right call. |
+| 24 | **CONFIRMED** | Both sentences verbatim, including the parenthetical lists `(like 429, 408, or 5xx)` and `(like 400, 402, or 403)`. |
+| 25 | **REFUTED** | See below — this is the one claim that will break a build. |
+| 26 | **CONFIRMED (with a sourcing correction)** | `"mediaResolution" : enum ( MediaResolution )` is in the GenerationConfig JSON representation — but the reference page's own description is only *"Optional. If specified, the media resolution specified will be used."* The quoted "determines the maximum number of tokens allocated per input image or video frame" is from the **image-understanding** page, about the SDK/proto spelling `media_resolution`. Two pages, not one. **And the enum values are no longer unknown** — see A4. |
+| 27 | **CONFIRMED but materially incomplete** | See below. |
+| 28 | **CONFIRMED exactly** | Raw grep of the migrate page: `v1beta2/interactions` = **9** occurrences, `v1beta/interactions` = **0**. interactions-overview = `v1beta/interactions` only. The note's count of 9 is right. (A `WebFetch` summary of the same page claimed 14 — ignore it; the raw count is 9.) |
+
+### Claim 25 — REFUTED
+
+Source re-fetched: <https://ai.google.dev/gemini-api/docs/models> ("Last updated 2026-10-01 UTC").
+
+The page has a **"Previous models"** section introduced verbatim with:
+
+> These models are deprecated and will be shut down soon; migrate to newer models to prevent service interruptions.
+
+and inside it, verbatim row labels:
+
+```
+Computer Use (Shut down)                   gemini-2.5-computer-use-preview-10-2025
+Gemini 2.0 Flash (Shut down)               gemini-2.0-flash
+Gemini 2.0 Flash-Lite (Shut down)          gemini-2.0-flash-lite
+Gemini 3.1 Flash-Lite Preview (Shut down)  gemini-3.1-flash-lite-preview
+Gemini 3 Pro Preview (Shut down)           gemini-3-pro-preview
+```
+
+So:
+
+- **`gemini-2.0-flash` is NOT live.** It is deprecated and marked "(Shut down)". Claim 25 lists it as "Also live". **Do not use it as a cheap fallback.** This is the concrete build hazard in this pass: a fallback chain ending in `gemini-2.0-flash` will fail, probably with the 404 whose message nobody has documented (claim 23).
+- Same for `gemini-2.0-flash-lite`, `gemini-3-pro-preview`, `gemini-3.1-flash-lite-preview`, `gemini-2.5-computer-use-preview-10-2025` — all five appear in **§1 of this note's own model list** with no shut-down marker. §1 conflates the live table and the deprecated table. **Treat §1 as unreliable; re-read the models page before picking any model other than `gemini-3.8-flash`.**
+- Everything else in claim 25 is confirmed live: `gemini-3.8-flash` (and the page banner says "Gemini 3.8 Flash is now available"), `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`, `gemini-3.1-flash-lite`, `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`.
+- One live model missing from §1: **`gemini-omni-1.1-flash`**.
+- Note the structured-output support table (§3.5) lists `Gemini 3.1 Flash-Lite Preview`, `Gemini 2.0 Flash` and `Gemini 2.0 Flash-Lite` — i.e. **that table is itself partly about shut-down models.** It does not list 3.6/3.7/3.8. Treat it as stale, not as a capability contract.
+
+### Claim 27 — the note says no doc combines image input with structured output. One does.
+
+Source: <https://ai.google.dev/gemini-api/docs/generate-content/image-understanding>, **"Object detection"** section.
+This is a verbatim REST sample combining an inline image part with a JSON-mode `generationConfig` in one request —
+exactly the LetterLens shape, and it was missed:
+
+```bash
+IMG_PATH="/path/to/image.png"
+if [[ "$(base64 --version 2>&1)" = *"FreeBSD"* ]]; then
+  B64FLAGS="--input"
+else
+  B64FLAGS="-w0"
+fi
+curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent" \
+  -H "x-goog-api-key: $GEMINI_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -X POST \
+  -d '{
+    "contents": [{
+      "parts":[
+        {
+          "inline_data": {
+            "mime_type":"image/png",
+            "data": "'"$(base64 $B64FLAGS $IMG_PATH)"'"
+          }
+        },
+        {"text": "Detect the all of the prominent items in the image. The box_2d should be [ymin, xmin, ymax, xmax] normalized to 0-1000."}
+      ]
+    }],
+    "generationConfig": {
+      "responseMimeType": "application/json"
+    }
+  }' 2> /dev/null
+```
+
+Python form on the same page, verbatim:
+
+```python
+config = types.GenerateContentConfig(
+  response_mime_type="application/json"
+  )
+response = client.models.generate_content(model="gemini-3.8-flash",
+                                          contents=[image, prompt],
+                                          config=config
+                                          )
+```
+
+JS form on the same page uses `responseMimeType: "application/json"`.
+
+**What this changes for the build:**
+- `generationConfig` *is* documented as composing with inline image input. The orthogonality argument in §3.7 is no longer only an inference.
+- What is still **not** shown anywhere is image input + `responseFormat.text.schema` (or + `responseSchema`) in one request. The gap is narrower than §3.7 says: it is now only the `schema` half, not the whole idea.
+- So the day-1 smoke test is still required, but it is cheap and its risk is low. **Recommended smoke-test ladder:** (1) image + `responseMimeType` only — this one is doc-backed and must work; (2) image + full `responseFormat.text.{mimeType,schema}`. If (2) fails and (1) passes, you have a clean fallback: `responseMimeType: "application/json"` + schema-in-the-prompt + Pydantic validation.
+- `document-processing` really does list, verbatim, "Extract information into structured output formats." as a capability — but that page contains **no** `responseFormat` / `responseMimeType` / `response_format` anywhere, so it is marketing copy, not a contract.
+
+### Additional errors found in the note body (not in the claim list)
+
+**E1 — §2's "the raw REST examples consistently use snake_case" is wrong.** The function-calling page's REST curl for a multimodal function result uses **camelCase inside a REST body**, verbatim:
+
+```json
+"parts": [
+  {
+    "inlineData": {
+      "displayName": "instrument.jpg",
+      "mimeType": "<MIME_TYPE>",
+      "data": "<IMAGE_B64>"
+    }
+  }
+]
+```
+
+So the docs mix casings *within REST*. Proto JSON accepts both; just don't build a rule on "REST = snake_case". (`inline_data` in the image examples, `inlineData` here, `functionDeclarations`/`toolConfig`/`responseFormat`/`mimeType` camelCase throughout.)
+
+**E2 — §1's model list mixes live and shut-down models.** See claim 25 above.
+
+**E3 — §3.5's structured-output support table is stale.** See claim 25 above.
+
+### Additions the build will need (A1–A6)
+
+**A1 — there is a *second*, non-deprecated `responseJsonSchema` field, and the docs describe it incoherently.** Verbatim from <https://ai.google.dev/api/generate-content>, GenerationConfig:
+
+> `_responseJsonSchema` **(deprecated)** — `value (Value format)` — *This item is deprecated!* Optional. Output schema of the generated response. This is an alternative to `responseSchema` that accepts JSON Schema. … Deprecated. Use `responseFormat` instead.
+>
+> `responseJsonSchema` — `value (Value format)` — Optional. An internal detail. Use `responseJsonSchema` rather than this field.
+
+That second description is self-referential and clearly a doc bug. **Don't touch either field.** Use `responseFormat`.
+
+For completeness, the deprecated `_responseJsonSchema` entry documents the *widest* supported JSON-Schema keyword set anywhere in these docs — verbatim, it lists `$id`, `$defs`, `$ref`, `$anchor`, `type`, `format`, `title`, `description`, `enum` (for strings and numbers), `items`, `prefixItems`, `minItems`, `maxItems`, `minimum`, `maximum`, `anyOf`, `oneOf` ("interpreted the same as `anyOf`"), `properties`, `additionalProperties`, `required` — several of which (`$ref`, `$defs`, `anyOf`, `oneOf`) the `responseFormat` subset list (§3.4) does **not** mention. If LetterLens needs `$ref`/`anyOf` in a schema, that is **undocumented for `responseFormat`** — test it, don't assume it. Same entry, verbatim: "Cyclic references are unrolled to a limited degree and, as such, may only be used within non-required properties. (Nullable properties are not sufficient.)"
+
+**A2 — the doc's own structured-output curl is genuinely broken, confirmed.** In the live page the `"required": ["name", "quantity"]` line sits *outside* the nested `items` object and a closing brace is misplaced, so the body as printed is invalid JSON. The corrected version in §3.2 of this note is the one to copy.
+(The text-generation streaming sample has a separate typo too: a missing comma after the `"usageMetadata"` object in the second chunk. And the function-calling modes paragraph reads "you can set the mode within the. function_calling_config" — a stray period.)
+
+**A3 — the Interactions SSE stream carries named `event:` lines, not just `data:` lines.** The note's §6.4 transcript shows only the `data:` halves. Verbatim from <https://ai.google.dev/gemini-api/docs/streaming>:
+
+```
+event: step.stop
+data: {"index":1,"event_type":"step.stop"}
+
+event: interaction.completed
+data: {"interaction":{...},"event_type":"interaction.completed"}
+
+event: done
+data: [DONE]
+```
+
+So each event has both an SSE `event:` name and an `event_type` inside the JSON, and the sentinel is preceded by `event: done`. An SSE client that only reads `data:` still works, but don't be surprised by the `event:` lines.
+
+**A4 — the `MediaResolution` enum values ARE documented; §2.6 marked them UNCONFIRMED.** Verbatim from <https://ai.google.dev/api/generate-content>:
+
+```
+MediaResolution — Media resolution for the input media.
+MEDIA_RESOLUTION_UNSPECIFIED   Media resolution has not been set.
+MEDIA_RESOLUTION_LOW           Media resolution set to low (64 tokens).
+MEDIA_RESOLUTION_MEDIUM        Media resolution set to medium (256 tokens).
+MEDIA_RESOLUTION_HIGH          Media resolution set to high (zoomed reframing with 256 tokens).
+```
+
+Use `"generationConfig": {"mediaResolution": "MEDIA_RESOLUTION_HIGH"}` for dense printed text on a photographed letter. Caveat: these are the *per-image token budgets* (64 / 256 / 256+reframing) — they do **not** obviously reconcile with the 258-tokens-per-768x768-tile model on the image-understanding page. Which one governs billing for `gemini-3.8-flash` is **not documented**; measure it from `usageMetadata.promptTokensDetails` on a real request before promising anyone a cost per letter.
+
+**A5 — the legacy Python streaming method name is `generate_content_stream`; §7.8 marked it UNCONFIRMED.** Verbatim from the text-generation page: `response = client.models.generate_content_stream(` (JS: `ai.models.generateContentStream({...})`).
+
+**A6 — `functionResponse` can carry a multimodal `parts[]` payload, and there is a Gemini-3-only "Function calling with Structured output" feature.** Both are on the function-calling page and both are absent from §4. The `functionResponse` REST shape is wider than §4.4 records:
+
+```json
+{
+  "functionResponse": {
+    "name": "get_image",
+    "id": "UNIQUE_CALL_ID_HERE",
+    "response": { "image_ref": { "$ref": "instrument.jpg" } },
+    "parts": [ { "inlineData": { "displayName": "instrument.jpg", "mimeType": "image/jpeg", "data": "<base64>" } } ]
+  }
+}
+```
+
+i.e. a tool can hand an **image** back to the model. And verbatim:
+
+> **Function calling with Structured output** — Note: This feature is available for Gemini 3 series models. For Gemini 3 series models, you can use function calling with structured output. This lets the model predict function calls or outputs that adhere to a specific schema. As a result, you receive consistently formatted responses when the model doesn't generate function calls.
+
+That is the documented pairing behind `VALIDATED` becoming the default (claim 11), and it is Gemini-3-only. If LetterLens is on `gemini-3.8-flash` it qualifies; on `gemini-2.5-*` it does not.
+
+### Blockers: assessment of the researcher's ten
+
+| Researcher's blocker | Verifier |
+|---|---|
+| Build on `responseFormat`, not deprecated `responseSchema` | **Agreed, confirmed.** Add: avoid `responseJsonSchema`/`_responseJsonSchema` too (A1). |
+| `nullable` not in the subset; use `{"type":["string","null"]}` | **Agreed, confirmed.** "The model ignores unsupported properties." is verbatim, so the silent-failure risk is real. |
+| `propertyOrdering` unnecessary except Gemini 2.0 | **Agreed, confirmed.** And Gemini 2.0 is itself shut down (claim 25), so it is now simply dead weight. |
+| Four modes; VALIDATED is the default when combining | **Agreed, confirmed** — and A6 shows the exact feature that triggers it. |
+| Gemini 3 `id` + thought-signature round-tripping | **Agreed, confirmed verbatim.** |
+| No doc confirms image + structured output | **Partly wrong — a verbatim image + `responseMimeType` JSON REST example exists** (claim 27 above). Still smoke-test the `schema` half, but the fallback is now known. |
+| Legacy SSE completion is undocumented | **Agreed, confirmed** (`DONE` appears 0 times on the text-generation page). |
+| 20MB covers the base64-inflated whole request | **Agreed** — "(text prompts, system instructions, and inline bytes) to 20MB" is verbatim, and base64 is ~4/3, so ~14-15MB of original bytes is the real ceiling. Arithmetic, not doc text. |
+| Bad model ID error string undocumented | **Agreed, confirmed.** Don't assert on the message. |
+| Interactions path disagreement | **Agreed, confirmed exactly** (9 x `v1beta2`, 0 x `v1beta` on the migrate page). |
+| *(new blocker)* | **`gemini-2.0-flash` and four other IDs in §1 are shut down.** Pin `gemini-3.8-flash`; do not build a fallback chain from §1 without re-reading the models page. |
+
+### Pages re-fetched in this verification pass (2026-10-03)
+
+| URL | How | Page "Last updated" |
+|---|---|---|
+| <https://ai.google.dev/api/generate-content> | curl + raw grep | — |
+| <https://ai.google.dev/gemini-api/docs/generate-content/image-understanding> | WebFetch + curl | 2026-09-04 |
+| <https://ai.google.dev/gemini-api/docs/generate-content/structured-output> | WebFetch + curl | 2026-09-02 |
+| <https://ai.google.dev/gemini-api/docs/generate-content/function-calling> | WebFetch + curl | — |
+| <https://ai.google.dev/gemini-api/docs/generate-content/text-generation> | curl | — |
+| <https://ai.google.dev/gemini-api/docs/generate-content/api-errors> | curl | 2026-09-20 |
+| <https://ai.google.dev/gemini-api/docs/generate-content/api-key> | curl | — |
+| <https://ai.google.dev/gemini-api/docs/generate-content/document-processing> | curl | — |
+| <https://ai.google.dev/gemini-api/docs/troubleshooting> | curl | — |
+| <https://ai.google.dev/gemini-api/docs/libraries> | curl | — |
+| <https://ai.google.dev/gemini-api/docs/models> | WebFetch + curl | 2026-10-01 |
+| <https://ai.google.dev/gemini-api/docs/streaming> | curl | — |
+| <https://ai.google.dev/gemini-api/docs/migrate-to-interactions> | WebFetch + curl | — |
+| <https://ai.google.dev/gemini-api/docs/interactions-overview> | curl | — |
+| <https://pypi.org/pypi/google-genai/json> | curl (live JSON) | fetched 2026-10-03 |
+
+**Still unverified after this pass:** `/gemini-api/docs/interactions-breaking-changes-may-2026` (exists in site nav, not fetched); whether `$ref`/`$defs`/`anyOf` work inside `responseFormat.text.schema`; whether `mediaResolution` or the 768x768 tile model governs billing; the exact error for a bad model ID; and image input + `responseFormat.text.schema` in one request.
+
+**Methodological warning for future agents:** `WebFetch`'s summarising model gave me three wrong answers on these pages — it reported 0 occurrences of "deprecated" on the reference page (actual: 152), 14 occurrences of `v1beta2` on the migrate page (actual: 9), and omitted `gemini-2.0-flash` from the models page. For anything load-bearing — enum lists, deprecation markers, counts — `curl` the page and grep the text yourself.
