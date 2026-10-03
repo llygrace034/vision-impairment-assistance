@@ -1,0 +1,17 @@
+{
+  "name": "receipt",
+  "profile": "typical",
+  "seed": 5,
+  "size_mm": [
+    58,
+    95
+  ],
+  "frame_bytes": 23951,
+  "truth": null,
+  "result": {
+    "http": 200,
+    "wall_s": 6.66,
+    "text": "TYPE: Pharmacy receipt\n\nCORNER\nPHARMACY\nParacetamol 500mg x16\n1.20\nPlasters assorted 2.45\nTOTAL GBP 3.65\n03/10/26 11:42 Till 2",
+    "elapsed_s": 5.97
+  }
+}

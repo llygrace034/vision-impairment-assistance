@@ -1,0 +1,17 @@
+{
+  "name": "flyer",
+  "profile": "typical",
+  "seed": 5,
+  "size_mm": [
+    105,
+    148
+  ],
+  "frame_bytes": 21964,
+  "truth": null,
+  "result": {
+    "http": 200,
+    "wall_s": 13.58,
+    "text": "TYPE: Bake sale flyer\n\nBAKE SALE\nSaturday 11 October, 10am-2pm\nVillage Hall, Mill Lane\nAll proceeds to the ward playroom\nContact: Sam 07700 900 123",
+    "elapsed_s": 12.61
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "smoke-sticky",
+  "profile": "poor",
+  "seed": 1,
+  "size_mm": [
+    76,
+    76
+  ],
+  "frame_bytes": 51672,
+  "truth": null,
+  "result": {
+    "http": 200,
+    "wall_s": 11.33,
+    "text": "TYPE: sticky note\n\nBack at 3pm\nCall Dr Patel 0117 496 0742\nre: Friday blood test",
+    "elapsed_s": 10.88
+  }
+}
