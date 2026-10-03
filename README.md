@@ -37,7 +37,7 @@ flowchart LR
 
 An **ElevenLabs conversational agent** owns the voice session, turn-taking and barge-in. Its tools run on three surfaces: `read_document` and `draft_reply` as **server tools** hitting the Python backend over a public HTTPS tunnel authenticated with a shared-secret header (the API key never reaches a browser); `add_event` and `set_reminder` as **client tools** in the page; `end_call` and `skip_turn` natively. The backend sends the frame to **Gemma 4 on the Gemini API** as `inline_data` base64 and gets back a letter object — `doc_type`, `sender`, `reference`, `key_dates`, `deadline`, `amounts`, `actions_required`, `confidence`. Full contract: [`output-schema.md`](skills/letter-reader/references/output-schema.md).
 
-**Measured, not assumed** ([note 08](docs/research/08-gemma-live-api-test-results.md)): only `gemma-4-31b-it` and `gemma-4-26b-a4b-it` are served — the original `gemma-3-27b-it` pin 404s. Vision is verified on `gemma-4-31b-it`. Calls take **20–57 s with a ~50% failure rate on serial requests**, so `LLM_TIMEOUT_MS=8000` cannot hold; the fix is a split model path — fast chat on a Gemini model, the slow vision pass on Gemma with its own ~90 s budget. `responseSchema` is accepted and **silently ignored** (200 with fenced JSON), so the backend validates in Python. Both models are thinking models: filter `thought: true` parts or the agent reads its scratchpad aloud.
+**Measured, not assumed** ([note 08](docs/research/08-gemma-live-api-test-results.md)): only `gemma-4-26b-a4b-it` and `gemma-4-31b-it` are served — the original `gemma-3-27b-it` pin 404s. The pin is **`gemma-4-26b-a4b-it`**, and the model choice is the whole ballgame: it answered **8/8 text calls at a 2.0 s median** and read **all three test letters correctly on the first attempt in 3.7–4.5 s**, while `gemma-4-31b-it` took 20–57 s and failed roughly half of the same serial calls. So `LLM_TIMEOUT_MS=8000` holds with ~4× margin on 26b, and the split model path note 08 §7 originally proposed is superseded — one Gemma model serves both chat and vision. Quota is **30 RPM per model**, so switching model is a legitimate overflow strategy. `responseSchema` is accepted and **silently ignored** (200 with fenced JSON), so the backend validates in Python. Both models are thinking models: filter `thought: true` parts or the agent reads its scratchpad aloud.
 
 ## Stack
 
@@ -47,7 +47,7 @@ React 19 + Vite + TypeScript · FastAPI + httpx + Pydantic · ElevenLabs Agents 
 
 As of 2026-10-03: the research, agent design and skill are done; the application code is being written now.
 
-**Done** — agent persona and tool inventory · `letter-reader` Agent Skill + output schema · eight verified research notes · Gemma vision verified end-to-end against a real letter with a live key · three synthetic test letters with expected extractions · pinned config · no keys in the repo.
+**Done** — agent persona and tool inventory · `letter-reader` Agent Skill + output schema · eight verified research notes · Gemma vision verified end-to-end against all three test letters with a live key · three synthetic test letters with expected extractions · pinned config · no keys in the repo.
 
 **Not yet** — `backend/` is `requirements.txt` only (no entrypoint) · `frontend/` is close to the stock Vite scaffold · `agent/*.json` does not exist · `CHAT_MODEL`/`VISION_TIMEOUT_MS` are commented out and inert · the accessibility work has no UI to apply to yet.
 
