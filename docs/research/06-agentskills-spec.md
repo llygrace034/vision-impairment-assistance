@@ -647,3 +647,486 @@ The two things most likely to break a LetterLens skill:
 
 1. A top-level `version:` (or any other extra key) in front matter. It must go under `metadata:` as a **quoted string**.
 2. Putting the skill somewhere the host doesn't scan. The spec is silent on location; use `.agents/skills/<name>/SKILL.md` for portability and `.claude/skills/<name>/SKILL.md` for Claude Code compatibility. Both are documented conventions, neither is normative.
+
+---
+
+## Independent verification (adversarial pass)
+
+**Verification date:** 2026-10-03
+**Method:** Every source below was re-fetched in this pass. The cited URLs in the original note were *not* taken on trust. Reference-implementation files were pulled as raw bytes with `curl` (not summarized by a model) so the quoted code is exact.
+
+### Sources I fetched myself in this pass
+
+| # | URL | How |
+|---|-----|-----|
+| V1 | https://agentskills.io/specification.md | WebFetch |
+| V2 | https://agentskills.io/llms.txt | curl (raw) |
+| V3 | https://agentskills.io/client-implementation/adding-skills-support.md | WebFetch |
+| V4 | https://agentskills.io/skill-creation/best-practices.md | WebFetch |
+| V5 | https://agentskills.io/skill-creation/optimizing-descriptions.md | WebFetch |
+| V6 | https://raw.githubusercontent.com/agentskills/agentskills/main/skills-ref/src/skills_ref/validator.py | curl (raw, exact) |
+| V7 | https://raw.githubusercontent.com/agentskills/agentskills/main/skills-ref/src/skills_ref/parser.py | curl (raw, exact) |
+| V8 | https://raw.githubusercontent.com/agentskills/agentskills/main/skills-ref/src/skills_ref/cli.py | curl (raw, exact) — **not fetched by the original pass** |
+| V9 | https://raw.githubusercontent.com/agentskills/agentskills/main/skills-ref/src/skills_ref/models.py | curl (raw, exact) — **not fetched by the original pass** |
+| V10 | https://raw.githubusercontent.com/agentskills/agentskills/main/skills-ref/src/skills_ref/prompt.py | curl (raw, exact) — **not fetched by the original pass** |
+| V11 | https://raw.githubusercontent.com/agentskills/agentskills/main/skills-ref/src/skills_ref/errors.py | curl (raw, exact) — **not fetched by the original pass** |
+| V12 | https://raw.githubusercontent.com/agentskills/agentskills/main/skills-ref/pyproject.toml | curl (raw, exact) — **not fetched by the original pass** |
+| V13 | https://raw.githubusercontent.com/agentskills/agentskills/main/skills-ref/README.md | curl (raw, exact) |
+| V14 | https://raw.githubusercontent.com/agentskills/agentskills/main/skills-ref/tests/test_parser.py | curl (raw, exact) — **not fetched by the original pass** |
+| V15 | https://raw.githubusercontent.com/agentskills/agentskills/main/skills-ref/tests/test_validator.py | curl (raw, exact) — **not fetched by the original pass** |
+| V16 | https://api.github.com/repos/agentskills/agentskills/git/trees/main?recursive=1 | curl (raw JSON, `"truncated": false`) |
+
+### Claim-by-claim verdicts
+
+| # | Claim (abridged) | Status |
+|---|---|---|
+| 1 | Skill = directory with at minimum SKILL.md; YAML frontmatter + Markdown | **CONFIRMED** (V1) |
+| 2 | Exactly six frontmatter fields, no others defined | **CONFIRMED** (V1, V6) |
+| 3 | No top-level `version`; nested under `metadata` as `"1.0"` | **CONFIRMED** (V1) — but the stated *reason* for quoting is wrong for skills-ref; see Correction C3 |
+| 4 | Validator errors on any field outside the six | **CONFIRMED** (V6, V15) |
+| 5 | `name`: 1-64 chars, a-z/0-9/hyphen, no leading/trailing/consecutive hyphen, matches dir | **CONFIRMED as spec text** (V1) — **but the validator is materially more permissive**; see Correction C5 |
+| 6 | `description`: 1-1024 chars, what + when, keywords | **CONFIRMED** (V1) |
+| 7 | `compatibility` 1-500; `metadata` string-to-string map; `allowed-tools` space-separated string, Experimental | **CONFIRMED** (V1) |
+| 8 | Spelling is `allowed-tools` (hyphen); `allowed_tools` rejected | **CONFIRMED** (V1, V6, V9) |
+| 9 | `MAX_SKILL_NAME_LENGTH=64`, `MAX_DESCRIPTION_LENGTH=1024`, `MAX_COMPATIBILITY_LENGTH=500` | **CONFIRMED** (V6, exact) |
+| 10 | Eight "exact" validator error strings | **REFUTED** — 3 of 8 are not what the code emits, 2 more are prefixes only; see Correction C10 |
+| 11 | Five exact parser error strings | **CONFIRMED** — all five match the source byte-for-byte (V7) |
+| 12 | 500 lines / under 5000 tokens are recommendations, not validated; no word-count limit | **CONFIRMED** (V1, V4, V6) |
+| 13 | Three progressive-disclosure tiers with those token figures | **CONFIRMED** (V1, V3) |
+| 14 | Relative paths from skill root; one level deep; avoid nesting | **CONFIRMED** (V1) |
+| 15 | SKILL.md must state WHEN to load each referenced file | **CONFIRMED** (V4, verbatim match) |
+| 16 | Spec does not mandate install location; the four conventions plus `.claude/skills/` | **CONFIRMED** (V3, verbatim match) |
+| 17 | Discovery scans for subdirs containing exactly `SKILL.md`; project overrides user | **CONFIRMED for the client guide** (V3) — **but skills-ref itself also accepts `skill.md`**; see Correction C17 |
+| 18 | Lenient client validation: warn on name issues, skip on missing description / bad YAML | **CONFIRMED** (V3, verbatim match) |
+| 19 | `skills-ref`, Python via pip/uv, three commands, "demonstration purposes only" | **CONFIRMED in substance; the quoted sentence is REFUTED as verbatim** — see Correction C19 |
+| 20 | No JSON Schema; skills-ref tree contents | **CONFIRMED on the substance (no schema file)**; the file list is incomplete — see Correction C20 |
+| 21 | Exit codes are not documented | **REFUTED** — they are documented, in `cli.py`; see Correction C21 |
+| 22 | Skills may not trigger on trivial one-step requests | **CONFIRMED** (V5, verbatim match) |
+| 23 | Unquoted colons = invalid YAML, most common cross-client failure | **CONFIRMED** (V3) — with a framing nuance, see Correction C23 |
+| 24 | `disable-model-invocation` is a client flag example, not a spec field | **CONFIRMED** (V3, V6) |
+
+---
+
+### Corrections
+
+#### C10 — The validator's error strings are f-strings with interpolated values. DO NOT string-equality-match them.
+
+Exact source (V6). What the claim got right:
+
+```python
+return ["Missing required file: SKILL.md"]                   # exact - correct
+errors.append("Missing required field in frontmatter: name")  # exact - correct
+errors.append("Field 'name' must be a non-empty string")      # exact - correct
+errors.append("Field 'compatibility' must be a string")       # exact - correct
+```
+
+What the claim got **wrong** — the real code is:
+
+```python
+return [f"Path does not exist: {skill_dir}"]      # NOT "Path does not exist"
+return [f"Not a directory: {skill_dir}"]          # NOT "Not a directory"
+errors.append(f"Skill name '{name}' must be lowercase")
+#   NOT "Skill name must be lowercase" - the name is interpolated INSIDE the sentence
+errors.append(
+    f"Directory name '{skill_dir.name}' must match skill name '{name}'"
+)
+#   NOT "Directory name must match skill name"
+```
+
+Other error strings the original note never captured (all verbatim, V6):
+
+```python
+f"Skill name '{name}' exceeds {MAX_SKILL_NAME_LENGTH} character limit ({len(name)} chars)"
+"Skill name cannot start or end with a hyphen"
+"Skill name cannot contain consecutive hyphens"
+f"Skill name '{name}' contains invalid characters. Only letters, digits, and hyphens are allowed."
+f"Description exceeds {MAX_DESCRIPTION_LENGTH} character limit ({len(description)} chars)"
+f"Compatibility exceeds {MAX_COMPATIBILITY_LENGTH} character limit ({len(compatibility)} chars)"
+f"Unexpected fields in frontmatter: {', '.join(sorted(extra_fields))}. Only {sorted(ALLOWED_FIELDS)} are allowed."
+```
+
+**Build implication:** if LetterLens asserts on validator output, use substring matching on stable fragments (`"must be lowercase"`, `"Unexpected fields in frontmatter"`, `"must match skill name"`), exactly as the reference tests themselves do (`assert any("lowercase" in e for e in errors)`, V15). Never `==`.
+
+#### C5 — The validator does NOT enforce a-z / 0-9. Unicode names are valid.
+
+The spec text (claim 5) is accurate as spec text, but `validator.py` enforces something looser. Verbatim (V6):
+
+```python
+def _validate_name(name: str, skill_dir: Path) -> list[str]:
+    """Validate skill name format and directory match.
+
+    Skill names support i18n characters (Unicode letters) plus hyphens.
+    Names must be lowercase and cannot start/end with hyphens.
+    """
+```
+
+and the character check is:
+
+```python
+if not all(c.isalnum() or c == "-" for c in name):
+```
+
+`str.isalnum()` is Unicode-aware, so any Unicode letter or digit passes. The reference test suite asserts this deliberately (V15):
+
+- `test_i18n_chinese_name` — directory and name both the Chinese word for "skill" (2 CJK chars) -> `assert errors == []`
+- `test_i18n_russian_name_with_hyphens` — a Cyrillic hyphenated name -> `assert errors == []`
+- `test_i18n_russian_lowercase_valid` — a lowercase Cyrillic name -> `assert errors == []`
+- `test_i18n_russian_uppercase_rejected` — the same name uppercased -> `assert any("lowercase" in e for e in errors)`
+
+Also missed: **names and directory names are NFKC-normalized and stripped before comparison** (V6):
+
+```python
+name = unicodedata.normalize("NFKC", name.strip())
+...
+dir_name = unicodedata.normalize("NFKC", skill_dir.name)
+if dir_name != name:
+```
+
+`test_nfkc_normalization` (V15) confirms a composed directory name matches a decomposed `name:` value. For LetterLens (ASCII kebab-case names) none of this bites — but do not build a stricter in-house regex and claim it mirrors `skills-ref`.
+
+#### C3 — BIGGEST MISS: the reference parser is `strictyaml`, not PyYAML. Everything is a string.
+
+The original note never named the YAML library. It matters a lot.
+
+`pyproject.toml` verbatim (V12):
+
+```toml
+[project]
+name = "skills-ref"
+version = "0.1.0"
+description = "Reference library for Agent Skills"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.0",
+    "strictyaml>=1.7.3",
+]
+
+[project.scripts]
+skills-ref = "skills_ref.cli:main"
+```
+
+`parser.py` verbatim (V7):
+
+```python
+import strictyaml
+...
+    try:
+        parsed = strictyaml.load(frontmatter_str)
+        metadata = parsed.data
+    except strictyaml.YAMLError as e:
+        raise ParseError(f"Invalid YAML in frontmatter: {e}")
+
+    if not isinstance(metadata, dict):
+        raise ParseError("SKILL.md frontmatter must be a YAML mapping")
+
+    if "metadata" in metadata and isinstance(metadata["metadata"], dict):
+        metadata["metadata"] = {str(k): str(v) for k, v in metadata["metadata"].items()}
+```
+
+Consequences the build needs:
+
+1. **Unquoted `version: 1.0` is NOT coerced to a float by `skills-ref`.** The reference test proves it (V14, `test_read_with_metadata`): the file contains unquoted `version: 1.0` under `metadata:` and the assertion is `assert props.metadata == {"author": "Test Author", "version": "1.0"}`. So the original note's reasoning ("quoted so YAML does not parse it as a float") is **wrong for skills-ref**. Quote it anyway — PyYAML- and js-yaml-based clients *do* coerce, and the spec's own example quotes it — but do not cite skills-ref as the reason.
+2. **The `isinstance(..., str)` guards are near-unreachable for scalars.** Because strictyaml returns `str` for every scalar, `"Field 'name' must be a non-empty string"` and `"Field 'compatibility' must be a string"` can only fire when the value is a mapping or a sequence (or empty/whitespace), not when it is a number or boolean. Do not write a test expecting `compatibility: 42` to produce the "must be a string" error.
+3. **strictyaml is a restricted YAML subset.** Use **block style only** for `metadata:` — every spec example (V1), every README example (V13) and every reference test (V14, V15) uses block style. The inline flow form `metadata: { version: "1.0" }` that appears in the original note's blockers list is **not demonstrated anywhere in any primary source I fetched**, and strictyaml is a restricted parser. *Confidence: the strictyaml dependency is CONFIRMED; whether flow style specifically raises is UNVERIFIED — I found no primary doc in this pass that settles it. Treat flow style as unsupported until someone runs it locally.*
+
+Write this, not the flow form:
+
+```yaml
+metadata:
+  author: letterlens
+  version: "0.1.0"
+```
+
+#### C17 — `skills-ref` accepts lowercase `skill.md`. The note's "must be exactly SKILL.md" is wrong for the validator.
+
+Section 7 of the original note states the filename "must be exactly `SKILL.md` — uppercase, with `.md`". That is the *client discovery* guidance from V3 ("subdirectories containing a file named exactly `SKILL.md`") and is confirmed as such. But `skills-ref` disagrees. Verbatim (V7):
+
+```python
+def find_skill_md(skill_dir: Path) -> Optional[Path]:
+    """Find the SKILL.md file in a skill directory.
+
+    Prefers SKILL.md (uppercase) but accepts skill.md (lowercase).
+    """
+    for name in ("SKILL.md", "skill.md"):
+        path = skill_dir / name
+        if path.exists():
+            return path
+    return None
+```
+
+Reference tests (V14): `test_find_skill_md_prefers_uppercase`, `test_find_skill_md_accepts_lowercase`, `test_read_properties_with_lowercase_skill_md`. **LetterLens should still always write `SKILL.md` uppercase** — the discovery guidance in V3 is the binding one for real clients — but a lowercase file will *pass* `skills-ref validate` while being invisible to a strict client. That asymmetry is a trap worth a CI check of its own.
+
+#### C21 — Exit codes ARE documented, and errors go to stderr, not stdout. This reverses a stated blocker.
+
+The original pass concluded (confidence: low) that exit codes are undocumented and advised asserting on stdout. Both halves are wrong. `cli.py` verbatim (V8):
+
+```python
+@main.command("validate")
+@click.argument("skill_path", type=click.Path(exists=True, path_type=Path))
+def validate_cmd(skill_path: Path):
+    """Validate a skill directory.
+
+    Checks that the skill has a valid SKILL.md with proper frontmatter,
+    correct naming conventions, and required fields.
+
+    Exit codes:
+        0: Valid skill
+        1: Validation errors found
+    """
+    if _is_skill_md_file(skill_path):
+        skill_path = skill_path.parent
+
+    errors = validate(skill_path)
+
+    if errors:
+        click.echo(f"Validation failed for {skill_path}:", err=True)
+        for error in errors:
+            click.echo(f"  - {error}", err=True)
+        sys.exit(1)
+    else:
+        click.echo(f"Valid skill: {skill_path}")
+```
+
+Documented exit codes for all three commands (V8 docstrings):
+
+| Command | 0 | 1 |
+|---|---|---|
+| `validate` | Valid skill | Validation errors found |
+| `read-properties` | Success | Parse error |
+| `to-prompt` | Success | Error |
+
+**Build implications:**
+
+- `skills-ref validate` **does** exit non-zero on failure. It is safe to use as a CI gate on exit status alone.
+- Failure output goes to **stderr** (`err=True`), formatted as `Validation failed for <path>:` then one `  - <error>` line per problem. Success goes to **stdout** as `Valid skill: <path>`. Capture stderr, not stdout, when collecting problems.
+- A **third** exit code exists in practice: `click.Path(exists=True)` rejects a nonexistent path *before* `validate()` runs, so Click emits its own usage error and exits **2**. This means the library error `f"Path does not exist: {skill_dir}"` is effectively **unreachable through the CLI** — it only appears when calling `validate()` from Python.
+- `skills-ref validate` accepts a path to the **file** as well as the directory, case-insensitively (V8):
+
+```python
+def _is_skill_md_file(path: Path) -> bool:
+    """Check if path points directly to a SKILL.md or skill.md file."""
+    return path.is_file() and path.name.lower() == "skill.md"
+```
+
+- A `--version` flag exists (`@click.version_option()` on the group).
+
+#### C19 — The README's production warning, verbatim.
+
+The original note presented `"designed for demonstration purposes only and not intended for production use"` as a quote. It is a paraphrase. The actual text (V13) is a GitHub callout block:
+
+```markdown
+> [!IMPORTANT]
+> This library is intended for demonstration purposes only. It is not meant to be used in production.
+```
+
+Everything else in claim 19 holds: the tool is `skills-ref`; `skills-ref validate ./my-skill` is the spec's own invocation (V1); the three commands are `validate`, `read-properties`, `to-prompt`; it is Python, installed with `pip install -e .` or `uv sync` from a clone, **not** npm and **not** cargo; Apache 2.0.
+
+Details the note missed (V12, V13): `requires-python = ">=3.11"`; dependencies `click>=8.0` and `strictyaml>=1.7.3`; package version `0.1.0`; author `Keith Lazuka <klazuka@anthropic.com>`; build backend `hatchling`; dev group `pytest>=7.0`, `ruff>=0.8.0`. The README also documents a macOS/Linux **uv** path the note omitted:
+
+```bash
+uv sync
+source .venv/bin/activate
+```
+
+and on Windows:
+
+```powershell
+uv sync
+.venv\Scripts\Activate.ps1
+```
+
+#### C20 — The `skills-ref/` file list was incomplete (the conclusion still stands).
+
+The GitHub tree API response (V16) came back with `"truncated": false`, so this is the complete tree. `skills-ref/` actually contains:
+
+```
+skills-ref/.gitignore          <- missed by the original note
+skills-ref/LICENSE
+skills-ref/README.md
+skills-ref/pyproject.toml
+skills-ref/uv.lock             <- missed by the original note
+skills-ref/src/skills_ref/__init__.py
+skills-ref/src/skills_ref/cli.py
+skills-ref/src/skills_ref/errors.py
+skills-ref/src/skills_ref/models.py
+skills-ref/src/skills_ref/parser.py
+skills-ref/src/skills_ref/prompt.py
+skills-ref/src/skills_ref/validator.py
+skills-ref/tests/__init__.py
+skills-ref/tests/test_parser.py
+skills-ref/tests/test_prompt.py
+skills-ref/tests/test_validator.py
+```
+
+Repo root also has `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `LICENSE`, `README.md`, `package.json`, `.gitignore`, and trees `.claude/` and `docs/`.
+
+**The substantive claim is CONFIRMED: there is no `.json` or `.yaml` schema file anywhere in the repo.** `validator.py` is the executable schema. (Note `uv.lock` exists, so `uv sync` has a pinned resolution — useful if you want a reproducible CI install.)
+
+#### C23 — Framing nuance on the colon gotcha.
+
+The fact is confirmed, but the "quote it or use a block scalar" advice in V3 is addressed to **client implementers building a parse fallback**, not to skill authors. Verbatim (V3):
+
+> Consider a fallback that wraps such values in quotes or converts them to YAML block scalars before retrying. This improves cross-client compatibility at minimal cost.
+
+For LetterLens as an *author*, the actionable rule is the same (quote any description containing a colon, or use a block scalar), but do not expect every client to have implemented the fallback.
+
+---
+
+### Things the researcher missed that the build will need
+
+#### M1 — `read-properties` JSON contract (from `models.py`, V9)
+
+This is the stable machine-readable surface for CI. Verbatim:
+
+```python
+    def to_dict(self) -> dict:
+        """Convert to dictionary, excluding None values."""
+        result = {"name": self.name, "description": self.description}
+        if self.license is not None:
+            result["license"] = self.license
+        if self.compatibility is not None:
+            result["compatibility"] = self.compatibility
+        if self.allowed_tools is not None:
+            result["allowed-tools"] = self.allowed_tools
+        if self.metadata:
+            result["metadata"] = self.metadata
+        return result
+```
+
+- `name` and `description` are **always** present.
+- `license`, `compatibility`, `allowed-tools` appear **only when non-None**. Do not assume the keys exist.
+- `metadata` appears **only when non-empty** (falsy check, not a None check) and defaults to `{}`.
+- The JSON key is **`allowed-tools`** (hyphen) even though the Python attribute is `allowed_tools`. `parser.py` reads it as `allowed_tools=metadata.get("allowed-tools")`.
+- `name` and `description` are `.strip()`ped by `read_properties` before being stored.
+
+#### M2 — `to_prompt` output format differs from the docs page. The code is authoritative.
+
+The original note recorded only the V3 flavour (indented, values inline). `prompt.py` emits something different — **each value on its own line** (V10):
+
+```python
+        lines.append("<skill>")
+        lines.append("<name>")
+        lines.append(html.escape(props.name))
+        lines.append("</name>")
+        lines.append("<description>")
+        lines.append(html.escape(props.description))
+        lines.append("</description>")
+
+        skill_md_path = find_skill_md(skill_dir)
+        lines.append("<location>")
+        lines.append(str(skill_md_path))
+        lines.append("</location>")
+
+        lines.append("</skill>")
+```
+
+Matching README example (V13):
+
+```xml
+<available_skills>
+<skill>
+<name>
+my-skill
+</name>
+<description>
+What this skill does and when to use it
+</description>
+<location>
+/path/to/my-skill/SKILL.md
+</location>
+</skill>
+</available_skills>
+```
+
+Also: `name` and `description` are **HTML-escaped** (`html.escape`); `location` is **not**. Paths are `Path(skill_dir).resolve()`d, so output is absolute. Empty input returns exactly `"<available_skills>\n</available_skills>"`. Note the docstring inside `prompt.py` shows the *inline* form (`<name>pdf-reader</name>`) and contradicts the code it documents — trust the code. If LetterLens parses this block, parse it loosely.
+
+#### M3 — Frontmatter delimiter parsing is naive. Two author-facing traps.
+
+Verbatim (V7):
+
+```python
+    if not content.startswith("---"):
+        raise ParseError("SKILL.md must start with YAML frontmatter (---)")
+
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        raise ParseError("SKILL.md frontmatter not properly closed with ---")
+
+    frontmatter_str = parts[1]
+    body = parts[2].strip()
+```
+
+- `content.startswith("---")` is byte-literal. A **UTF-8 BOM**, a leading blank line, or a leading comment makes the file invalid. Write `SKILL.md` as BOM-less UTF-8 with `---` on line 1, column 1. (Relevant on Windows: PowerShell `Out-File`/`>` often emits a BOM. Use `Set-Content -Encoding utf8NoBOM` or write via the Write tool.)
+- `split("---", 2)` with `maxsplit=2` means a `---` horizontal rule in the **body** is safe, but a `---` inside the frontmatter block is not.
+- `body = parts[2].strip()` — leading/trailing body whitespace is discarded.
+
+#### M4 — Error hierarchy, and `validate()` vs `read_properties()` behave differently
+
+`errors.py` verbatim (V11):
+
+```python
+class SkillError(Exception):
+    """Base exception for all skill-related errors."""
+
+class ParseError(SkillError):
+    """Raised when SKILL.md parsing fails."""
+
+class ValidationError(SkillError):
+    """Raised when skill properties are invalid.
+
+    Attributes:
+        errors: List of validation error messages (may contain just one)
+    """
+    def __init__(self, message: str, errors: list[str] | None = None):
+        super().__init__(message)
+        self.errors = errors if errors is not None else [message]
+```
+
+- `validate(Path)` **returns a list** and never raises for ordinary problems; it catches `ParseError` and returns `[str(e)]`.
+- `read_properties(Path)` **raises** — `ParseError` for a missing file or bad YAML, `ValidationError` for a missing or empty `name`/`description`. It explicitly does *not* do full validation: *"This function parses the frontmatter and returns properties. It does NOT perform full validation. Use validate() for that."* (V7)
+- `cli.py` catches only `SkillError` in `read-properties` and `to-prompt`.
+
+#### M5 — `validate()` accumulates all errors, except for four early returns
+
+Verbatim control flow (V6): `validate()` returns a single-element list immediately for (1) path missing, (2) not a directory, (3) no SKILL.md, (4) parse error. Otherwise `validate_metadata()` accumulates every problem. **The unexpected-fields check runs first**, so it is always error #1 in the list when present. A skill with five problems reports five lines — do not write CI that only reads the first.
+
+#### M6 — Two docs pages the original note never listed
+
+`llms.txt` (V2) has nine pages. The note's source table covered six of them and never recorded:
+
+- https://agentskills.io/skill-creation/evaluating-skills.md — "How to test whether your skill produces good outputs using eval-driven iteration."
+- https://agentskills.io/skill-creation/using-scripts.md — "How to run commands and bundle executable scripts in your skills."
+- https://agentskills.io/clients.md — "Agent products that support the Agent Skills format."
+
+If LetterLens ships a skill with `scripts/`, `using-scripts.md` is the page to read and **neither pass has read it**. Flagged, not summarized.
+
+#### M7 — There is a published skill that automates description tuning
+
+Verbatim (V5):
+
+> The [`skill-creator`](https://github.com/anthropics/skills/tree/main/skills/skill-creator) Skill automates this loop end-to-end: it splits the eval set, evaluates trigger rates in parallel, proposes description improvements using Claude, and generates a live HTML report you can watch as it runs.
+
+V5 also gives a complete runnable bash trigger-eval harness (jq plus `claude -p --output-format json`, detecting `tool_use` where `.name == "Skill"` and `.input.skill == $skill`), a 20-query / 8-10-each eval-set recipe, 3 runs per query, a 0.5 trigger-rate threshold, and a 60/40 train/validation split to avoid overfitting. If LetterLens cares whether its skill actually fires, that page is the method — the original note captured only the four writing principles from it.
+
+#### M8 — Client guidance the note omitted that affects where LetterLens puts its skill
+
+From V3:
+
+- **Trust gating:** *"Project-level skills come from the repository being worked on, which may be untrusted... Consider gating project-level skill loading on a trust check — only load them if the user has marked the project folder as trusted."* A project-level LetterLens skill may silently not load in an untrusted folder.
+- **Scan bounds:** *"Set reasonable bounds (e.g., max depth of 4-6 levels, max 2000 directories)"* and skip `.git/` and `node_modules/`. Keep the skill shallow.
+- **Minimum stored record** is three fields: `name`, `description`, `location` (absolute path to `SKILL.md`).
+- **Filtered skills are hidden entirely** from the catalog rather than listed-and-blocked.
+- **Frontmatter may or may not reach the model.** *"Among existing implementations with dedicated activation tools, most take this approach — stripping the frontmatter after extracting `name` and `description` during discovery."* So **do not put instructions in frontmatter and expect the model to read them.** Anything the model must act on belongs in the body.
+
+---
+
+### Revised blockers
+
+1. **Install location** — original blocker **stands, CONFIRMED verbatim.** Use `.agents/skills/<name>/SKILL.md` for portability and `.claude/skills/<name>/SKILL.md` for Claude Code. A bare `skills/` directory is documented nowhere.
+2. **No top-level `version:`** — original blocker **stands**, but for the right reason. It is invalid because it is outside `ALLOWED_FIELDS`, not because of float coercion. And write `metadata:` in **block style**, not the inline `{ version: "1.0" }` form the original blocker used.
+3. **No JSON Schema, no PyPI package** — **stands, CONFIRMED.** Git clone plus `pip install -e .` or `uv sync` from `skills-ref/`. `uv.lock` is present if you want pinned CI.
+4. **"Exit codes undocumented, assert on stdout"** — **REVERSED.** Exit codes are documented in `cli.py`: 0 pass, 1 validation errors, and Click adds 2 for a nonexistent path. `skills-ref validate` is safe as a CI gate on exit status. Problems print to **stderr**, not stdout.
+5. **Size limits unenforced** — **stands, CONFIRMED.** 500 lines and ~5,000 tokens are recommendations in prose only; nothing in `validator.py` counts lines, tokens or words. Write the check yourself if you want it.
+6. **Strict vs lenient conformance diverge** — **stands, CONFIRMED verbatim**, and it is worse than described: `skills-ref` accepts lowercase `skill.md` and Unicode names that a strict reading of the spec would reject, while shipping clients accept name/directory mismatches that `skills-ref` rejects. **Neither bar is a superset of the other.** Author to the intersection: uppercase `SKILL.md`, ASCII kebab-case `name` matching the directory, a non-empty `description` (quoted if it contains a colon), and nothing outside the six fields.
+7. **NEW — the YAML parser is `strictyaml`.** Block style only; assume no flow mappings, no anchors, no aliases; every scalar comes back a string. The specific flow-style failure is **unverified** — confirm locally before relying on it either way.

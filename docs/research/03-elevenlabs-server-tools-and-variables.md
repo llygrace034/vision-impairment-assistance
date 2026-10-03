@@ -1309,3 +1309,323 @@ Session auth endpoints (verbatim from React SDK page):
 - https://elevenlabs.io/docs/eleven-agents/integrate/environment-variables.md — "Deploy the same agent across dev, staging, and production without duplicating resources." (relevant to `ConvAIEnvVarLocator`)
 - https://elevenlabs.io/docs/eleven-agents/customization/personalization/twilio-personalization.md — conversation-initiation webhook that returns dynamic variables server-side.
 - https://elevenlabs.io/docs/eleven-agents/customization/tools/mcp.md and .../mcp/security.md
+
+---
+
+## Independent verification (adversarial pass)
+
+**Verification date:** 2026-10-03
+**Method:** every page below was re-fetched in this pass with `curl -sL` (raw `.md`), plus the live
+OpenAPI spec at `https://api.elevenlabs.io/openapi.json` (2,252,803 bytes) parsed with Python. The
+researcher's cited URLs were **not** taken on trust. Where a claim's *substance* is right but its
+*cited source* is wrong, that is recorded — a future agent following the citation would not find the quote.
+
+**Headline:** 24 of 27 claims CONFIRMED, 0 REFUTED on substance, 3 UNVERIFIABLE (correctly flagged as
+such by the researcher). No hallucinated package names, model IDs, endpoints or field names were found.
+`value_type` is confirmed genuinely **absent** from the API — the researcher was right to flag it.
+Five source mis-attributions and three substantive gaps are recorded below.
+
+### Verdict table
+
+| # | Claim | Status | Note |
+| --- | --- | --- | --- |
+| 1 | `server-tools.md` 308s to `webhook-tools.md` | **CONFIRMED** | Reproduced exactly; see §V.1 |
+| 2 | `system__conversation_id` + complete 16-variable list | **CONFIRMED** | Exact, verbatim, count matches |
+| 3 | Body is `api_schema.request_body_schema`, no string template | **CONFIRMED** | Verbatim match |
+| 4 | No `value_type` field; five mutually-exclusive fields | **CONFIRMED** | `grep value_type` returns **zero** hits |
+| 5 | `dynamic_variable` populates a property / whole object | **CONFIRMED** | Verbatim at both levels |
+| 6 | `dynamic_variable: "system__conversation_id"` not shown literally | **CONFIRMED** (+ upgrade) | See §V.3 — stronger support than researcher found |
+| 7 | `{{...}}` not the body mechanism | **CONFIRMED** (source wrong) | See §V.2 |
+| 8 | `{{variable_name}}`, case-sensitive | **CONFIRMED** | Verbatim |
+| 9 | `startSession({dynamicVariables})` + wire `dynamic_variables` | **CONFIRMED** | See §V.4 for a caveat |
+| 10 | `@elevenlabs/react` does not document `dynamicVariables` | **CONFIRMED** (+ worse) | See §V.4 — the JS SDK page doesn't either |
+| 11 | `dynamic_variable_placeholders` | **CONFIRMED** | Verbatim |
+| 12 | Full response by default; `response_filter`; `response_body_schema` doc-only | **CONFIRMED** | Verbatim |
+| 13 | Timeouts 20 default / 5–300 webhook / 1–120 client; `method` default GET | **CONFIRMED** | Verified per tool-type variant |
+| 14 | `tool_error_handling_mode: auto` hides errors for non-native tools | **CONFIRMED** | Verbatim — the build's biggest footgun |
+| 15 | No HMAC on webhook **tool** requests | **CONFIRMED** | See §V.5 — a false positive was ruled out |
+| 16 | Header value = string or 3 locator objects | **CONFIRMED** | Re-verified against live OpenAPI |
+| 17 | Single braces `{id}` in url + `path_params_schema` | **CONFIRMED** (source split) | See §V.2 |
+| 18 | `parameters` + `expects_response` (default false) | **CONFIRMED** | Verbatim on all three pages |
+| 19 | `clientTools` object, async, `useConversationClientTool` | **CONFIRMED** | Verbatim |
+| 20 | `execution_mode`: immediate / post_tool_speech / async | **CONFIRMED** | Verbatim |
+| 21 | `getId()`, `startSession` → conversationId, `conversation_id` required | **CONFIRMED** | Verbatim |
+| 22 | `secret__` → headers only, `<REDACTED>` afterwards | **CONFIRMED** | Verbatim |
+| 23 | `interruption_mode` on 4 tool kinds, strictest wins | **CONFIRMED** | Verbatim |
+| 24 | `assignments` / `DynamicVariableAssignment` | **CONFIRMED** (but see §V.6) | The "system tools cannot" rider is **contradicted elsewhere** |
+| 25 | Package names + `POST /v1/convai/tools` | **CONFIRMED** (source wrong) | See §V.2 |
+| 26 | `t=`/`v0=` byte format not documented | **UNVERIFIABLE** | Correctly flagged low; absence re-confirmed |
+| 27 | `llms-full.txt` is a decoy | **CONFIRMED** | Same size **and same MD5** |
+
+---
+
+### V.1 Claim 1 — redirects reproduced
+
+```
+curl -s -o /dev/null -w "%{http_code} -> %{redirect_url}\n" \
+  "https://elevenlabs.io/docs/eleven-agents/customization/tools/server-tools.md"
+# 308 -> https://elevenlabs.io/docs/eleven-agents/customization/tools/webhook-tools.md
+
+curl -sL -o /dev/null -w "final=%{url_effective} redirects=%{num_redirects}\n" \
+  "https://elevenlabs.io/docs/conversational-ai/customization/tools/server-tools"
+# final=https://elevenlabs.io/docs/eleven-agents/customization/tools/webhook-tools redirects=2
+```
+
+Note the old `conversational-ai` path takes **two** hops (`conversational-ai/...` →
+`eleven-agents/.../server-tools` → `eleven-agents/.../webhook-tools`). A client that follows only one
+redirect lands on a 308, not a 200. `curl -sL` is mandatory.
+
+**Claim 27 strengthened:** not merely equal in size — **byte-identical**.
+
+```
+llms.txt       200  215130  md5 f53bc31a90c36d7d4775c20d0d855616
+llms-full.txt  200  215130  md5 f53bc31a90c36d7d4775c20d0d855616
+```
+
+### V.2 Source mis-attributions (substance right, citation wrong)
+
+A future agent chasing these citations would come up empty. Corrected sources:
+
+1. **Claim 7 / §4.1 item 6 — the `voicemail_message` quote is NOT on `dynamic-variables.md`.**
+   `grep -c voicemail dynamic-variables.md` → **0**. The quote lives in the API/OpenAPI schema at
+   `VoicemailDetectionToolConfig.voicemail_message`, verbatim:
+   > "Optional message to leave on voicemail when detected. If not provided, the call will end immediately when voicemail is detected. Supports dynamic variables (e.g., `{{system__time}}`, `{{system__call_duration_secs}}`, `{{custom_variable}}`)."
+
+   Source: `https://api.elevenlabs.io/openapi.json` → `components.schemas.VoicemailDetectionToolConfig.properties.voicemail_message.description`
+
+2. **Claim 7 — the list of `{{...}}`-supporting free-text fields is incomplete.** The spec documents
+   **three more**, all newly found in this pass:
+   - `SoftTimeoutConfig.message` — "Message to show when the first soft timeout is reached while waiting for LLM response. Supports dynamic variables (e.g., `{{system__time}}`, `{{custom_variable}}`)."
+   - `SoftTimeoutConfig.llm_generated_message_prompt_override` — "Custom prompt for generating the soft timeout filler message when use_llm_generated_message is enabled. Recent conversation context is provided as a separate user message. If not set, the default prompt will be used. Supports dynamic variables (e.g., `{{system__time}}`, `{{custom_variable}}`)."
+   - `SoftTimeoutConfigOverride.message` and `SoftTimeoutConfigWorkflowOverride.message` / `.llm_generated_message_prompt_override` — same text.
+
+   These are the **complete** set of `{{...}}`-templated config strings in the spec (6 field paths, 4 schemas).
+   Confirms the researcher's conclusion: `{{...}}` is for prompts and free-text config strings only,
+   **never** for a `request_body_schema`.
+
+3. **Claim 17 — the "literal types" half is not on `webhook-tools.md`.** `grep 'literal types'
+   webhook-tools.md` → **0**. That sentence is on
+   `https://elevenlabs.io/docs/eleven-agents/api-reference/tools/create.md` (the
+   `query_params_schema` field description). The single-brace path-param quote **is** verbatim on
+   `webhook-tools.md`, in a blockquote callout:
+   > "If the API requires path parameters, include variables in the URL path by wrapping them in curly braces `{}`, for example: `/api/resource/{id}` where `id` is a path parameter."
+
+   (The page also states it in its own prose, slightly differently: "Include variables in the URL path by
+   wrapping them in curly braces `{}`: * **Example**: `/api/resource/{id}` where `id` is a path parameter.")
+
+4. **Claim 25 — `react.md` does not contain `@elevenlabs/elevenlabs-js`, the Python package name, or the
+   create-tool endpoint.** Counts on `react.md`: `@elevenlabs/elevenlabs-js` → **0**, `convai/tools` → **0**.
+   All three facts are correct but come from
+   `https://elevenlabs.io/docs/eleven-agents/api-reference/tools/create.md`:
+   - `POST https://api.elevenlabs.io/v1/convai/tools` (line 5 of that page)
+   - `import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";`
+
+   `react.md` is the right source only for `@elevenlabs/react` + `@elevenlabs/client` and the re-export line.
+
+5. **Claim 24 — the "system tools cannot update dynamic variables" rider is from `client-tools.md`, not
+   `create.md`.** See §V.6, where it turns out to be **wrong as written**.
+
+### V.3 Claim 6 — UPGRADE: stronger doc support than the researcher found
+
+The researcher's core finding is confirmed: **no doc page shows
+`"dynamic_variable": "system__conversation_id"` literally inside a `request_body_schema`.** Verified by
+grepping every fetched page — `request_body_schema` appears only twice, both times as a field
+description in `create.md`, never in a worked example.
+
+But two pieces of evidence the researcher missed make this materially safer than "MEDIUM":
+
+1. **`dynamic-variables.md` explicitly names the conversation ID as a dynamic-variable use case.** From
+   the Overview's own examples list, verbatim:
+   > "* **Passing data** to tool calls
+   > * **Accessing system information** like conversation ID or call duration"
+
+   Source: https://elevenlabs.io/docs/eleven-agents/customization/personalization/dynamic-variables.md
+   That is the docs stating, in one list, that dynamic variables both feed tool calls and carry the
+   conversation ID.
+
+2. **The live OpenAPI spec places no constraint on the `dynamic_variable` field.** It is a bare string
+   with no `pattern`, no `enum`, and no `minLength`:
+   ```json
+   {
+     "type": "string",
+     "title": "Dynamic Variable",
+     "description": "The name of the dynamic variable to use for this property's value. Mutually exclusive with description, is_system_provided, constant_value, and is_omitted.",
+     "default": ""
+   }
+   ```
+   (`components.schemas.LiteralJsonSchemaProperty.properties.dynamic_variable`)
+   So nothing in the schema rejects a `system__`-prefixed name. Contrast `AllowedValues.dynamic_variable`,
+   which **does** carry `"minLength": 1` — showing the spec does apply constraints where it means to.
+
+**Revised confidence: MEDIUM-HIGH → HIGH-minus.** Still smoke-test on first integration (no literal
+example exists), but the §4.2 config in this note is the correct shape to try first. The researcher's
+recommended belt-and-braces approach in §4.3 (also pass your own `letterlens_session_id`) remains the
+right call and makes the smoke test non-blocking.
+
+### V.4 Claim 10 — CONFIRMED, and the gap is wider than stated
+
+`grep -ci dynamicvariable react.md` → **0**. The React page documents `useConversation` options as
+exactly `clientTools`, `overrides`, `textOnly`, `serverLocation` (lines 159–162) and never mentions
+dynamic variables. Confirmed.
+
+**What the researcher missed:** the **JavaScript SDK page does not document it either.**
+
+```
+grep -ci dynamicvariable eleven-agents/libraries/java-script.md   # => 0
+```
+
+So `dynamicVariables` appears in **exactly one place in the entire fetched doc set**: a single code
+example on `dynamic-variables.md` (line 315), inside a snippet that imports from `@elevenlabs/client`.
+There is **no options reference anywhere** that lists `dynamicVariables` as a `startSession` option.
+
+The claim that it is "documented for `@elevenlabs/client`" overstates the evidence — it is documented
+*in one example that uses* `@elevenlabs/client`. The option is nonetheless real at the protocol level
+(see claim 9, confirmed below), so the recommendation does not change, but **both** SDKs should be
+treated as needing the smoke test, not just React.
+
+Claim 9's wire protocol **is** solidly confirmed, verbatim from
+`https://elevenlabs.io/docs/eleven-agents/api-reference/eleven-agents/websocket.md`:
+
+```yaml
+        dynamic_variables:
+          type: object
+          additionalProperties:
+            description: Any type
+        type:
+          type: string
+          enum:
+            - conversation_initiation_client_data
+      title: ConversationInitiationClientData
+```
+
+**Bonus — resolves an open flag in §2.3:** the researcher marked `custom_llm_extra_body` as
+"UNCONFIRMED — not seen in the fetched excerpt". It **is** present on that message (line 1685), as is a
+`user_id` field:
+
+```yaml
+        custom_llm_extra_body:
+          type: object
+          additionalProperties:
+            description: Any type
+        user_id:
+```
+
+Full field list on `ConversationInitiationClientData`: `conversation_config_override`,
+`custom_llm_extra_body`, `user_id`, `source_info`, `environment`, `starting_workflow_node_id`,
+`procedure_ids`, `dynamic_variables`, `type`.
+
+### V.5 Claim 15 — CONFIRMED, after ruling out a false positive
+
+This is the claim most expensive to get wrong, so it was checked hardest. A naive
+`grep -i 'hmac|signature' webhook-tools.md` returns **9 hits**, which looks like a refutation. All nine
+are **AWS S3 presigned-URL query parameters inside documentation image URLs**
+(`X-Amz-Algorithm=AWS4-HMAC-SHA256`, `X-Amz-Signature=...`). Not one refers to signing a tool request.
+
+Across the full fetched doc set, `ElevenLabs-Signature` / `elevenlabs-signature` appears in **exactly two
+files**, both about call-ended events, never about mid-conversation tool calls:
+
+```
+eleven-agents/workflows/post-call-webhooks.md:36, 64, 99, 134
+eleven-api/resources/webhooks.md:185, 213, 248, 283
+```
+
+**Claim 15 CONFIRMED. The researcher's blocker stands: there is no signature to verify on a LetterLens
+tool endpoint.** A shared-secret header (`{"secret_id": "..."}` in `request_headers`) plus IP allowlisting
+is the whole trust boundary. Claim 16's locator union was re-verified against the live spec and matches
+the note byte-for-byte, including all three locator schemas and their descriptions.
+
+**Claim 26 CONFIRMED as UNVERIFIABLE** (researcher's "low" was the right label). Neither page documents
+the signed-string construction; both direct you to the SDK. Verbatim, present on both pages:
+> "The JavaScript SDK exposes `constructEvent`; the Python SDK exposes `construct_event` with **`rawBody`**, **`sig_header`**, and **`secret`** (these are not named `payload` / `signature` in Python). Both verify the signature, validate the timestamp, and parse the JSON payload."
+
+### V.6 CORRECTION — "system tools cannot update dynamic variables" is wrong as a blanket rule
+
+The note repeats this in §2.6 and claim 24. It is a **direct quote** from `client-tools.md` line 292, so
+the researcher quoted accurately — but the statement is **contradicted by two other primary sources**,
+and the build should not rely on it.
+
+1. **The API schema lists `assignments` on the `system` tool variant.** In
+   `create.md`, under `- type: system` (line 79), verbatim:
+   > `assignments` (list of DynamicVariableAssignment, optional) — Configuration for extracting values from tool responses and assigning them to dynamic variables
+
+   `assignments` is present on **all four** tool-config variants — `client` (55), `mcp` (77), `system` (79),
+   `webhook` (97) — and again on all four output variants (131, 153, 155, 173).
+
+2. **There is a dedicated system tool whose entire purpose is updating dynamic variables.** From
+   `https://elevenlabs.io/docs/eleven-agents/customization/tools/system-tools/update-state.md`, verbatim:
+   > "The **Update state** tool lets your agent set one or more dynamic variables while a conversation is in progress. Like other system tools, it only changes the internal state of the conversation — it never calls an external API or a client-side function."
+   > "**Multiple updates per call**: A single tool call can assign up to 10 dynamic variables at once."
+   > "**Immediate availability**: Once the tool runs, the updated dynamic variables are available to the rest of the conversation — later prompts, other tool calls, and overrides can all reference them, the same way as any other dynamic variable."
+
+**Best reading:** the `client-tools.md` sentence is stale or means narrowly "system tools have no HTTP
+response to extract from via `assignments`". System tools **can** set dynamic variables, via the
+`update_state` tool's expression mechanism. Treat the blanket claim as unreliable and do not design
+around it.
+
+### V.7 Things the build will need that the researcher did not record
+
+1. **There are exactly four tool types**, and the discriminator values are confirmed from `create.md`:
+   `client`, `mcp`, `system`, `webhook`. There is **no** separate "API integration" tool type, despite
+   `follow_redirects` saying "Not supported for API integration tools" and `is_system_provided` saying
+   "Used by API Integration Webhook tools for templating". An API integration is a `webhook` tool
+   subtype. Do not go looking for `"type": "api_integration"` — it does not exist.
+
+2. **`update_state` is a cheaper option than a webhook for pure state writes.** If LetterLens only needs
+   to flag something mid-call (e.g. `needs_human = true`), `update_state` does it with **no HTTP
+   round-trip**, which sidesteps the 20s timeout, the `tool_error_handling_mode: auto` footgun and the
+   response-filter context cost all at once. It cannot write to your database, so it complements rather
+   than replaces the webhook — but for anything that is only conversation state, prefer it.
+   Source: https://elevenlabs.io/docs/eleven-agents/customization/tools/system-tools/update-state.md
+
+3. **`update_state` failures are atomic and visible.** Verbatim: "If a state update fails to evaluate —
+   for example, a division by zero — the tool call returns an error and none of the updates in that call
+   are applied." Relevant if LetterLens derives a value arithmetically.
+
+4. **`AllowedValues.dynamic_variable` carries `"minLength": 1`** in the live spec, while the
+   `LiteralJsonSchemaProperty.dynamic_variable` field does not. Worth knowing if you ever send an empty
+   string: one is rejected by schema, the other is the documented default (`""`).
+
+5. **`dynamic_variables` (the `DynamicVariablesConfig` field) exists on the tool config itself**, on all
+   four tool types, separate from the agent-level config in §2.2. The note only documents the agent-level
+   placeholder map. Per-tool placeholders may be the cleaner place to declare LetterLens' own variables.
+
+### V.8 Residual risks for the LetterLens build
+
+Ranked by cost-if-wrong. The first two are the only places where a doc read cannot settle it.
+
+1. **`dynamic_variable: "system__conversation_id"` inside `request_body_schema` has no literal doc
+   example.** Confidence is now HIGH-minus (§V.3), not proven. **First integration test must assert the
+   received body is `{"session_id": "conv_..."}` and not `{"session_id": ""}`** — the field's documented
+   default is the empty string, so a silent failure looks like an empty string, not an error. Keep the
+   §4.3 belt-and-braces `letterlens_session_id` so this is recoverable.
+2. **`dynamicVariables` has no options-reference entry on either browser SDK page** (§V.4). Smoke-test on
+   first run regardless of which SDK is used.
+3. **`tool_error_handling_mode: "auto"` hides webhook errors** (claim 14, confirmed verbatim). Set it to
+   `"summarized"` explicitly in the LetterLens tool config, or the agent will narrate a save that failed.
+   This is the single highest-value one-line fix in the whole note.
+4. **The old `conversational-ai` URL needs two redirect hops** (§V.1), not one.
+5. **"System tools cannot update dynamic variables" should not be designed around** (§V.6).
+
+### V.9 Pages fetched in this verification pass
+
+All re-fetched 2026-10-03 with `curl -sL`; HTTP 200 and byte counts recorded.
+
+| Page | Bytes |
+| --- | --- |
+| https://elevenlabs.io/docs/eleven-agents/customization/tools/webhook-tools.md | 20,741 |
+| https://elevenlabs.io/docs/eleven-agents/customization/tools/client-tools.md | 12,776 |
+| https://elevenlabs.io/docs/eleven-agents/customization/personalization/dynamic-variables.md | 19,736 |
+| https://elevenlabs.io/docs/eleven-agents/api-reference/tools/create.md | 55,050 |
+| https://elevenlabs.io/docs/eleven-agents/libraries/react.md | 21,284 |
+| https://elevenlabs.io/docs/eleven-agents/libraries/java-script.md | 11,549 |
+| https://elevenlabs.io/docs/eleven-agents/customization/tools/tool-configuration/tool-interruptions.md | 4,509 |
+| https://elevenlabs.io/docs/eleven-agents/workflows/post-call-webhooks.md | 28,516 |
+| https://elevenlabs.io/docs/eleven-api/resources/webhooks.md | 12,373 |
+| https://elevenlabs.io/docs/eleven-agents/api-reference/eleven-agents/websocket.md | 53,849 |
+| https://elevenlabs.io/docs/eleven-agents/customization/tools/system-tools/update-state.md (new) | 6,828 |
+| https://api.elevenlabs.io/openapi.json | 2,252,803 |
+| https://elevenlabs.io/docs/llms.txt | 215,130 |
+| https://elevenlabs.io/docs/llms-full.txt | 215,130 (identical) |
+
+Still **not** fetched (open leads, unchanged): `code-tools.md`,
+`integrate/environment-variables.md`, `twilio-personalization.md`, `tools/mcp.md`, `tools/mcp/security.md`.
