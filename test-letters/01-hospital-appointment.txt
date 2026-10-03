@@ -1,0 +1,38 @@
+Mere Valley Hospital Trust - Outpatient Booking Centre
+Our ref: MVH/OPD/884219 - Date: 14 October 2026
+
+Mrs Eleanor Whitcombe, 12 Alderwood Close, Mereford MF2 7BH
+
+YOUR OUTPATIENT APPOINTMENT - DERMATOLOGY
+
+You have been given an appointment in the Dermatology Clinic following the
+referral from your GP, Dr Haleema Sunderland, at Alderwood Surgery.
+
+Clinic:     Dermatology (Clinic 4B)
+Date:       Thursday 6 November 2026
+Time:       10:40
+Location:   Northgate Site, Level 2
+Clinician:  Dr A. Oyelaran
+
+Please arrive 15 minutes before your appointment time to book in at the
+self-check-in screens in the main atrium. Bring a list of any medicines you are
+currently taking, and your reading glasses if you use them.
+
+If you cannot attend, please telephone the Booking Centre on 01xx 496 7730 at
+least 5 working days beforehand. If you miss two appointments without telling
+us, you may be referred back to your GP.
+
+Parking at the Northgate Site is limited. Blue badge spaces are available in Car
+Park C, and the hospital shuttle runs from the Mereford Park and Ride every 20
+minutes.
+
+Yours sincerely
+J. Pemberton-Hale, Outpatient Booking Manager
+
+--- expected extraction ---
+doc_type: hospital_appointment
+sender: Mere Valley Hospital Trust
+key_dates: 2026-11-06 10:40 (appointment)
+deadline: 2026-10-30 (5 working days before, to cancel)
+actions_required: attend or call to cancel; bring medicines list
+amounts: none

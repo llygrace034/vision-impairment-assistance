@@ -1,0 +1,40 @@
+Borough of Kerneby - Civil Parking Enforcement
+PCN number: KB7719240385 - Date of issue: 2 October 2026
+
+Mr Dominic Abara, Flat 6, Saltmarsh House, Kerneby KB3 4RD
+
+PENALTY CHARGE NOTICE
+Issued under the Traffic Management Act 2004.
+
+Vehicle:        KB19 ZTC (grey hatchback)
+Location:       Harbour Row, bay 12
+Date & time:    28 September 2026, 14:52
+Contravention:  01 - parked in a restricted street during prescribed hours
+
+AMOUNT TO PAY
+Full penalty charge:      GBP 70.00
+Reduced if paid early:    GBP 35.00
+Pay reduced amount by:    16 October 2026
+Pay full amount by:       30 October 2026
+
+If the reduced amount of GBP 35 is not received by 16 October 2026 the full
+charge of GBP 70 becomes payable. If no payment or representation is received by
+30 October 2026 a Notice to Owner may be served and the charge may increase by a
+further 50 percent.
+
+Pay online at the Borough payments portal quoting the PCN number, or by
+telephone on 01xx 220 4411 (automated, 24 hours).
+
+If you believe this notice was issued incorrectly you may make an informal
+challenge in writing within 14 days. Making a challenge does not extend the
+discount period unless the challenge is accepted.
+
+Parking Services, Borough of Kerneby
+
+--- expected extraction ---
+doc_type: parking_penalty
+sender: Borough of Kerneby
+amounts: GBP 70.00 (full), GBP 35.00 (reduced)
+key_dates: 2026-10-16 (discount deadline), 2026-10-30 (full payment deadline)
+deadline: 2026-10-16
+actions_required: pay GBP 35 by 16 Oct, or challenge within 14 days

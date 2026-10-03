@@ -1,0 +1,44 @@
+Thornfield Lane Primary School
+Date: 5 October 2026
+
+Dear Parent or Guardian of Amara Nkemelu (Class 5B),
+
+YEAR 5 RESIDENTIAL TRIP - CARRICK BAY FIELD CENTRE
+
+Year 5 will visit the Carrick Bay Field Centre for three days of coastal
+geography and team activities. The programme includes rock pooling, a cliff-top
+walk and an evening orienteering exercise.
+
+Departure:      Monday 17 November 2026, 08:15
+Return:         Wednesday 19 November 2026, 16:30
+Meeting point:  School main gate
+Total cost:     GBP 148.00 per pupil
+Deposit:        GBP 40.00
+
+PLEASE RETURN BY FRIDAY 24 OCTOBER 2026
+
+To confirm your child's place we need the signed consent slip and the deposit of
+GBP 40 by Friday 24 October 2026. The balance of GBP 108 is due by Friday 7
+November 2026. Payment is through the school's online payment system; if you
+would prefer to pay in instalments please speak to the school office in
+confidence.
+
+Please also tell us about any medication, dietary requirement or medical
+condition we should know about.
+
+CONSENT SLIP - please detach and return
+I give permission for my child to attend the Carrick Bay residential trip.
+Child's name: ______ Class: ______
+Medication / dietary needs: ______
+Emergency contact number: ______
+Signed: ______ Date: ______
+
+--- expected extraction ---
+doc_type: school_consent_form
+sender: Thornfield Lane Primary School
+amounts: GBP 148.00 (total), GBP 40.00 (deposit), GBP 108.00 (balance)
+key_dates: 2026-11-17 08:15 (departure), 2026-11-19 16:30 (return),
+           2026-10-24 (return slip + deposit), 2026-11-07 (balance due)
+deadline: 2026-10-24
+actions_required: sign and return consent slip, pay GBP 40 deposit,
+                  declare medication/dietary needs
