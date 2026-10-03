@@ -1885,3 +1885,449 @@ await conversation.setVolume({ volume: 0.5 });
   signed-URL API reference proper (facts in §8.3 came from S6 and S3 instead).
 - `https://elevenlabs.io/docs/eleven-agents/guides/quickstarts/next-js.md` — fetched, summarized
   only; re-read if you want its full component listing.
+
+---
+
+## Independent verification (adversarial pass)
+
+Verified: 2026-10-03, by a second agent, independently. **Nothing below was taken from the
+researcher's cited URLs on trust.** Every artefact was re-fetched in this pass:
+
+- The two npm packages were downloaded as **tarballs** (`registry.npmjs.org/@elevenlabs/react/-/react-1.16.0.tgz`,
+  `.../client/-/client-1.26.0.tgz`) and extracted, so the `.d.ts` / `.js` quotes below are from the
+  files npm actually ships, not from a CDN rewrite.
+- npm metadata re-fetched from `https://registry.npmjs.org/@elevenlabs%2Freact`, `%2Fclient`,
+  `@11labs%2Freact`, `@11labs%2Fclient`, `elevenlabs`, `@elevenlabs%2Felevenlabs-js`,
+  `@elevenlabs%2Freact-native`.
+- Docs re-fetched as `.md` from `elevenlabs.io/docs/...`, starting from `llms.txt`.
+- **Two sources the first pass did not use**, which settle three of its open questions:
+  - `https://elevenlabs.io/docs/eleven-agents/api-reference/agents/create.md` (S15) — the full agent
+    config schema, with field types and **defaults**.
+  - `https://elevenlabs.io/docs/api-reference/authentication.md` (S16) — the normative API-auth page.
+
+**Headline: 29 of 32 claims CONFIRMED verbatim. 1 claim is partly REFUTED (#25 — the allowlist
+shape is wrong and will break code). 2 claims are confirmed but mis-cited (#22, #31). The low-
+confidence #27 is upgraded to CONFIRMED. The low-confidence #29 negative result stands.**
+
+The researcher's 15 stated blockers all survive scrutiny. They were not over-claiming.
+
+### Verdict table
+
+| # | Status | Note |
+|---|---|---|
+| 1 | **CONFIRMED** | Strengthened — see below |
+| 2 | **CONFIRMED** | |
+| 3 | **CONFIRMED** | |
+| 4 | **CONFIRMED** | Incomplete, not wrong — see below |
+| 5 | **CONFIRMED** | Including the "stale docs page" charge |
+| 6 | **CONFIRMED** | |
+| 7 | **CONFIRMED** | Key-for-key, in order |
+| 8 | **CONFIRMED** | |
+| 9 | **CONFIRMED** | |
+| 10 | **CONFIRMED** | |
+| 11 | **CONFIRMED** | |
+| 12 | **CONFIRMED** | One sub-quote mis-attributed to the `.d.ts` |
+| 13 | **CONFIRMED** | |
+| 14 | **CONFIRMED** | |
+| 15 | **CONFIRMED** | Strengthened: `expects_response` **default is `false`** (S15) |
+| 16 | **CONFIRMED** | |
+| 17 | **CONFIRMED** | |
+| 18 | **CONFIRMED but INCOMPLETE** | The real list has **15** system vars, not 4 |
+| 19 | **CONFIRMED** | |
+| 20 | **CONFIRMED** | |
+| 21 | **CONFIRMED + REFINED** | It *is* automatic in text-only mode |
+| 22 | **CONFIRMED, mis-cited** | And `CALLBACK_KEYS` is not importable where you'd expect |
+| 23 | **CONFIRMED** | |
+| 24 | **CONFIRMED** | Plus: `turn_eagerness` default **is** documented — `normal` |
+| 25 | **PARTLY REFUTED** | **`allowlist` is an array of objects, not strings** |
+| 26 | **CONFIRMED** | Exactly, field for field |
+| 27 | **CONFIRMED (upgraded from LOW)** | S16 makes it normative |
+| 28 | **CONFIRMED** | |
+| 29 | **CONFIRMED (negative result stands)** | Re-grepped independently |
+| 30 | **CONFIRMED** | |
+| 31 | **CONFIRMED, mis-cited** | Quote lives on the JS SDK page |
+| 32 | **CONFIRMED** | |
+
+---
+
+### Claim 25 — the one real error. Fix this before writing auth code.
+
+The claim quotes two field descriptions as verbatim:
+`enable_auth` = *"Activates signed URL requirement"* and `allowlist` = *"Array of approved
+hostnames"*. **Neither string appears on the cited page** (`customization/authentication.md`) — I
+grepped it for `Activates` (0 hits) and `Array of approved` (0 hits). They are paraphrases presented
+as quotes.
+
+The field **names** are real. Here are their actual definitions, verbatim from **S15**
+(`https://elevenlabs.io/docs/eleven-agents/api-reference/agents/create.md`, section `AuthSettings`):
+
+```
+- `enable_auth` (boolean, optional, default: false) — If set to true, starting a conversation with an agent will require a signed token
+- `allowlist` (list of AllowlistItem, optional) — A list of hosts that are allowed to start conversations with the agent
+- `require_origin_header` (boolean, optional, default: false) — When enabled, connections with no origin header will be rejected. If the allowlist is empty, this option has no effect.
+- `shareable_token` (string, optional) — A shareable token that can be used to start a conversation with the agent
+```
+
+and, verbatim:
+
+```
+### AllowlistItem
+
+- `hostname` (string, required) — The hostname of the allowed origin
+```
+
+**-> `allowlist` is a list of OBJECTS `{ "hostname": "..." }`, not a list of strings.** Writing
+`allowlist: ["letterlens.app"]` will fail validation. This also resolves the first pass's open
+question about where the field lives in the config JSON. Verbatim from
+`customization/authentication.md`:
+
+```json
+{
+  "platform_settings": {
+    "auth": {
+      "enable_auth": false,
+      "allowlist": [
+        { "hostname": "example.com" },
+        { "hostname": "app.example.com" },
+        { "hostname": "localhost:3000" }
+      ]
+    }
+  }
+}
+```
+
+Note `localhost:3000` is given as a valid allowlist entry — so an allowlisted agent still works in
+dev. The dashboard location is the **Security** tab (verbatim: "navigate to the **Security** tab"),
+not the Advanced tab.
+
+Everything else in claim 25 is **CONFIRMED verbatim**: the 15-minute expiry sentence, the 10-hostname
+limit ("You can specify up to 10 unique hostnames that are allowed to connect to your agent"), exact
+hostname matching with separate subdomain entries, and the `signed_url` response shape.
+
+One correction to the first pass's *advice* (not a claim under test): section 8.1 recommends a public
+agent plus allowlist as the hackathon path. The docs disagree — verbatim from
+`customization/authentication.md`: "For client-side applications, signed URLs are the recommended
+default."
+
+---
+
+### Claims confirmed with corrections or additions
+
+**#1 — strengthened.** `dist/index.d.ts` line 1 is exactly `export * from "@elevenlabs/client";`.
+Additional evidence the first pass did not cite: `@elevenlabs/react@1.16.0`'s own `package.json`
+declares `"dependencies": {"@elevenlabs/client": "1.26.0"}` (an exact pin, not a range) and
+`"peerDependencies": {"react": ">=16.8.0"}`. So the one-dependency claim is right, and the client
+version you get is pinned — no float.
+
+**#4 — incomplete, not wrong.** The provider props type and the `useRawConversationRef` error string
+are verbatim. But the claim implies a single shared error message. There are **eight distinct
+messages**, one per hook — grep of `dist/conversation/*.js`:
+
+```
+ConversationClientTools.js:77:  throw new Error("useConversationClientTool must be used within a ConversationProvider");
+ConversationContext.js:24:      throw new Error("useRawConversationRef must be used within a ConversationProvider");
+ConversationContext.js:38:      throw new Error("useRegisterCallbacks must be used within a ConversationProvider");
+ConversationControls.js:122:    throw new Error("useConversationControls must be used within a ConversationProvider");
+ConversationFeedback.js:40:     throw new Error("useConversationFeedback must be used within a ConversationProvider");
+ConversationInput.js:51:        throw new Error("useConversationInput must be used within a ConversationProvider");
+ConversationMode.js:36:         throw new Error("useConversationMode must be used within a ConversationProvider");
+ConversationStatus.js:40:       throw new Error("useConversationStatus must be used within a ConversationProvider");
+```
+
+`useConversationClientTool` throwing matters: a tool-registering leaf component also needs the
+provider. `useRawConversation` tolerating absence is confirmed verbatim from its docstring.
+
+**#5 — confirmed, including the accusation against the docs.** `react.md` line 291, re-fetched today,
+still reads verbatim:
+
+```js
+const conversationId = await conversation.startSession({
+  agentId: "agent_7101k5zvyjhmfg983brhmhkd98n6",
+  userId: "user_9302xkm82nds93", // optional field
+});
+```
+
+The shipped type is `startSession: (options?: HookOptions) => void`. The docs page is stale. Lines
+335 and 372 of the same page also `await conversation.startSession({...})` without using a return
+value — harmless but misleading.
+
+**#12 — one sub-quote mis-sourced.** The `livekitUrl`, `webRtc.singlePeerConnection` ("LiveKit's v1
+join protocol") and `iceTransportPolicy` ("relay" / "on networks that drop direct UDP flows") quotes
+are all verbatim in `client@1.26.0/dist/utils/BaseConnection.d.ts`, as cited. But the sentence "In
+WebRTC mode the input format and sample rate are hardcoded to `pcm` and `48000` respectively" is
+**not** in that `.d.ts` — it is `libraries/java-script.md` line 276. The *output* has its own
+sentence at line 304. Content correct, citation wrong.
+
+**#15 — strengthened, and the default confirms the blocker.** The dashboard wording, verbatim from
+`tools/client-tools.md`: "When you want your agent to receive data back from a client tool, ensure
+that you tick the **Wait for response** option in the tool configuration." Followed by: "Once the
+client tool is added, when the function is called the agent will wait for its response and append the
+response to the conversation context."
+
+The API field, verbatim from **S15** — note the **default**:
+
+```
+- `expects_response` (boolean, optional, default: false) — If true, calling this tool should block the conversation until the client responds with some response which is passed to the llm. If false then we will continue the conversation without waiting for the client to respond, this is useful to show content to a user but not block the conversation
+```
+
+**`default: false`.** So the first pass's blocker is not just real, it is the *out-of-the-box*
+behaviour: a freshly defined client tool ignores its own return value until you change this. The
+claim's gloss ("false when no acknowledgment is needed") is a paraphrase; the real description is
+above.
+
+**#18 — confirmed but materially incomplete.** All four named variables exist. But
+`personalization/dynamic-variables.md` lists **15**, and several are useful here:
+`system__agent_id`, `system__current_agent_id`, `system__caller_id`, `system__called_number`,
+`system__call_duration_secs`, `system__time_utc`, `system__time`, `system__timezone`,
+`system__conversation_id`, `system__call_sid`, `system__call_id`, `system__agent_turns`,
+`system__current_agent_turns`, `system__current_subagent_turns`, `system__is_text_only`,
+`system__conversation_history`. Verbatim: "Custom dynamic variables cannot use the reserved
+`system__` prefix." The Python `ConversationInitiationData(dynamic_variables=...)` form is confirmed.
+
+Also missed by the first pass, and useful for testing a prompt before wiring real values — verbatim:
+"Set `conversation_config.agent.dynamic_variables.dynamic_variable_placeholders`. Each key is the
+variable name; the value is the placeholder used during testing."
+
+**#21 — confirmed and refined.** `handleTentativeAgentResponse` -> `onDebug` is verbatim. But the
+claim overstates the gating. Verbatim from `events/client-events.md`, under
+`agent_chat_response_part`:
+
+> * Streams the agent's response text as it is generated, as `start`, `delta` and `stop` messages
+> * **Always sent in text-only mode**; in voice conversations it must be explicitly enabled in the agent's `client_events` configuration
+> * Not sent while the agent or an active procedure uses a blocking guardrail, which has to evaluate the whole response before any of it is released
+> * `response_id` identifies the message being streamed and matches the `response_id` of the `agent_response` that later commits it
+
+Two things the build needs: it is free in text-only mode, and the last bullet is the **documented
+join key** for reconciling streamed parts against the final `agent_response` — exactly the problem
+the first pass flagged as blocker #8 but solved only by guesswork ("reconcile using
+`response_id`/`event_id`"). The docs state the contract.
+
+**#22 — confirmed, and stronger than claimed, but mis-cited twice.**
+
+Composition is real and goes further than "the React SDK composes": the *client's* own
+`mergeOptions` does it. Verbatim from `client@1.26.0/dist/utils/mergeOptions.d.ts`:
+
+```
+ * Merges multiple partial option objects into one.
+ *
+ * - Plain objects are deep-merged so that later configs can override
+ *   individual nested fields without wiping unrelated ones.
+ * - Functions sharing the same key are composed: all are called in
+ *   order (earliest config first) with the same arguments.
+ * - All other values are shallow-merged (last value wins).
+```
+
+and the implementation, verbatim:
+
+```js
+            else if (typeof accVal === "function" && typeof objVal === "function") {
+                result[key] = ((...args) => {
+                    accVal(...args);
+                    objVal(...args);
+                });
+            }
+```
+
+The provider's merge order, verbatim from `ConversationProvider.js`:
+
+```js
+const sessionOptions = mergeOptions({ livekitUrl: calculatedLivekitUrl }, defaultConfig, stableCallbacks, listenerMap.compose(), options ?? {}, { origin });
+```
+
+**-> A consequence the first pass missed, and it is a trap:** because same-key functions are
+*composed and never replaced*, you **cannot override a provider-level callback at `startSession`
+level**. Both fire, provider first. If LetterLens puts a default `onMessage` on the provider and a
+per-session `onMessage` on `startSession`, every message is handled **twice**. Pick one level per
+callback.
+
+Two citation errors:
+
+- The comment "Used by the React SDK to pre-initialize listener maps for callback composition" is in
+  `@elevenlabs/client@1.26.0/dist/types.d.ts` (above `CALLBACK_KEYS`), **not** in react's
+  `ConversationProvider.js`.
+- **`CALLBACK_KEYS` is not importable from `@elevenlabs/client` or `@elevenlabs/react`.** The
+  provider imports it from `"@elevenlabs/client/internal"`. The client's public `index.d.ts`
+  re-exports only *types* from `BaseConversation.js`, and `CALLBACK_KEYS` is a runtime value, so
+  `export * from "@elevenlabs/client"` in react's index does not carry it. Confirmed against
+  `package.json` `exports`: `"./internal": "./dist/internal.js"`. If you want it, import
+  `{ CALLBACK_KEYS } from "@elevenlabs/client/internal"` — an undocumented subpath, so do not build
+  on it.
+
+**#24 — confirmed, and one of the first pass's open questions is closed.** Both quotes are verbatim
+at `conversation-flow.md` lines 344 and 346, and the 1-30s range for `turn_timeout` is verbatim
+("must be between 1 and 30 seconds"). The first pass listed the `turn_eagerness` default as
+unresolved. **S15 documents it.** Verbatim:
+
+```
+- `turn_timeout` (double, optional, default: 7) — Maximum wait time for the user's reply before re-engaging the user
+- `turn_eagerness` (enum, optional, default: normal) — Controls how eager the agent is to respond. Low = less eager (waits longer), Standard = default eagerness, High = more eager (responds sooner)
+  - Allowed values: `patient`, `normal`, `eager`
+```
+
+So: `turn_timeout` default **7** seconds, `turn_eagerness` default **`normal`**. (The description's
+"Low/Standard/High" wording is inconsistent with the `patient/normal/eager` enum values — a docs bug;
+use the enum values.)
+
+**#27 — upgraded from LOW to CONFIRMED.** The claim's own hedge ("The API-reference parameter table
+did not itself list required headers") is correct — I re-fetched `get-webrtc-token.md` and it has no
+header section at all. But the first pass stopped one page too early. **S16**
+(`https://elevenlabs.io/docs/api-reference/authentication.md`) is normative, verbatim:
+
+> The ElevenLabs API uses API keys for authentication. **Every request to the API must include your
+> API key**, used to authenticate your requests and track usage quota.
+
+> All API requests should include your API key in an `xi-api-key` HTTP header as follows:
+
+```bash
+xi-api-key: ELEVENLABS_API_KEY
+```
+
+> **Remember that your API key is a secret.** Do not share it with others or expose it in any
+> client-side code (browsers, apps).
+
+The code-comment quote in the claim is also verbatim (`java-script.md` lines 122-124). **Treat
+`xi-api-key` as documented-required, not inferred.** S16 also mentions API-key **IP allowlisting**
+(non-allowlisted IPs rejected with `403`) — worth knowing if token minting suddenly 403s from a
+deploy platform with rotating egress IPs.
+
+**#29 — the negative result stands, independently reproduced.** `llms.txt` is 1374 lines today. My
+own grep for `microphone|permission|https requirement|secure context|localhost` returned exactly one
+page: `help-center/troubleshooting/how-can-i-make-sure-my-microphone-is-working.md`. I fetched it.
+It covers Windows privacy settings and Chrome per-site permission toggles only — **no statement about
+HTTPS, secure contexts, or localhost.** So: confirmed, there is no ElevenLabs-documented
+secure-context requirement. (I also tried `llms-full.txt` to grep the whole corpus at once; it
+returns a 15-byte `Redirecting...` stub, so corpus-wide grep is not available that way. Noting it so
+nobody wastes time on it.) Treat the secure-context rule as a browser platform fact, cited to MDN,
+not to ElevenLabs.
+
+**#31 — confirmed, quote is on a different page than cited.** The quote is verbatim, but at
+`libraries/java-script.md` lines 166-168 — **not** `events/client-events.md`. (The first pass's own
+section 6.6 attributed it correctly to S3; the claim statement regressed.) The four named events are
+each confirmed on `client-events.md` with "Must be explicitly enabled in the agent's `client_events`
+configuration".
+
+**And this closes another open question.** The first pass could not find the `client_events` array
+literal syntax for enabling events via API. **S15 has the complete enum**, verbatim:
+
+```
+- `client_events` (list of enum, optional) — The events that will be sent to the client
+  - Allowed values: `conversation_initiation_metadata`, `asr_initiation_metadata`, `ping`, `audio`, `interruption`, `user_transcript`, `tentative_user_transcript`, `agent_response`, `agent_response_correction`, `client_tool_call`, `mcp_tool_call`, `mcp_connection_status`, `agent_tool_request`, `agent_tool_response`, `agent_tool_response_full_payload`, `agent_response_metadata`, `vad_score`, `agent_chat_response_part`, `client_error`, `guardrail_triggered`, `dtmf_request`, `agent_response_complete`, `context_usage`, `internal_turn_probability`, `internal_tentative_agent_response`
+```
+
+So agents-as-code is possible: set `conversation_config.client_events` to include `interruption`,
+`agent_response_correction`, `agent_chat_response_part`, `user_transcript`, `agent_response`, `audio`.
+
+**Still unresolved, as the first pass said:** the schema marks `client_events` `optional` with **no
+documented default list**, so whether `interruption` ships enabled on a new agent remains
+**UNVERIFIABLE from docs**. Check the dashboard. The first pass was right to flag it.
+
+---
+
+### What the first pass MISSED that the build will need
+
+Found while verifying; none of these are in the note above.
+
+**1. Conversations hard-stop at 10 minutes by default.** Verbatim from S15:
+
+```
+- `max_duration_seconds` (integer, optional, default: 600) — The maximum duration of a conversation in seconds
+```
+
+A LetterLens demo that walks through a long letter will be cut off at 600s with no code-level warning.
+Raise it on the agent before demo day.
+
+**2. Double-fired callbacks.** See #22 above. Provider-level and `startSession`-level callbacks are
+**composed, not overridden**. Put each callback at exactly one level.
+
+**3. `onConversationCreated` / `ConversationLifecycleOptions`.** Present in
+`client/dist/BaseConversation.d.ts` and in react's `HookOptions`, unmentioned by the first pass:
+
+```ts
+export type ConversationCreatedCallback = (conversation: Conversation) => void;
+```
+
+It hands you the `Conversation` instance as soon as it exists — earlier than `onConnect`. The
+provider consumes it internally. Verified in `ConversationProvider.js`: the provider builds
+`providerLifecycleOptions` for `onConversationCreated`, `onConnect`, `onDisconnect` and
+`onStatusChange` and **spreads them over** your options (`{...sessionOptions, ...providerLifecycleOptions}`,
+a plain spread, *not* `mergeOptions`) — but each wrapper re-invokes yours
+(`sessionOptions.onConnect?.(props)`, `userOnDisconnect?.(details)`,
+`sessionOptions.onStatusChange?.(props)`, `userOnConversationCreated?.(conv)`). So your four
+lifecycle callbacks still fire, just after the provider's bookkeeping. They are the four exceptions
+to the double-fire rule in item 2.
+
+**4. Status `"disconnecting"` is where the provider releases the conversation.** Verbatim comment
+from `ConversationProvider.js`, relevant to the two-enum gotcha in #9:
+
+```js
+        // "disconnecting" marks the moment the session stops being usable, on
+        // every path (agent hangup, raw endSession(), provider endSession()) —
+        // release the conversation here so it clears in the same React batch
+        // as the status transition, and consumers never observe a live status
+        // with a released conversation (or vice versa).
+```
+
+So the client-level `"disconnecting"` is not merely "swallowed" by React — it is the trigger the
+React layer uses. `useRawConversation()` goes `null` at that moment.
+
+**5. Data-residency base URLs for token minting.** `get-webrtc-token.md` lists servers the note's
+section 8 does not mention:
+
+```
+- `https://api.elevenlabs.io` (Production, default)
+- `https://api.us.elevenlabs.io` (Production US)
+- `https://api.eu.residency.elevenlabs.io` (Production EU)
+- `https://api.in.residency.elevenlabs.io` (Production India)
+- `https://api.sg.residency.elevenlabs.io` (Production Singapore)
+```
+
+If the workspace is on EU/India/Singapore residency, minting against `api.elevenlabs.io` will fail.
+Pair this with `serverLocation` on `HookOptions`.
+
+**6. `participant_name` defaults to the user ID.** Verbatim: "Optional custom participant name. If
+not provided, user ID will be used."
+
+**7. `require_origin_header` in `AuthSettings`** (see #25). Verbatim: "When enabled, connections with
+no origin header will be rejected. If the allowlist is empty, this option has no effect." This is the
+knob that makes an allowlist meaningfully enforceable.
+
+**8. Turn-taking options worth a look for a reading-aloud agent**, all from S15's `TurnConfig`:
+
+```
+- `initial_wait_time` (double, optional) — How long the agent will wait for the user to start the conversation if the first message is empty. If not set, uses the regular turn_timeout.
+- `silence_end_call_timeout` (double, optional, default: -1) — Maximum wait time since the user last spoke before terminating the call
+- `spelling_patience` (enum, optional, default: auto) — Controls if the agent should be more patient when user is spelling numbers and named entities. Auto = model based, Off = never wait extra
+- `speculative_turn` (boolean, optional, default: false) — When enabled, starts generating LLM responses during silence before full turn confidence is reached, reducing perceived latency. May increase LLM costs.
+- `retranscribe_on_turn_timeout` (boolean, optional, default: false) — When enabled, if VAD detects no speech, attempts to re-transcribe accumulated audio at turn timeout. Disables silence discount billing for affected turns.
+```
+
+`speculative_turn` is the cheap latency win for a demo. `spelling_patience` matters if users read
+reference numbers off a letter.
+
+**9. `agent_response_correction` must itself be in `client_events`.** The first pass's blocker #8
+(barge-in corrupts the transcript) depends on a callback whose event is in the gated enum (item under
+#31). So that blocker has a **dashboard prerequisite the first pass did not state**: without
+`agent_response_correction` selected, `onAgentResponseCorrection` never fires and the transcript stays
+wrong with no way to detect it. Enable `interruption` **and** `agent_response_correction` together.
+
+**10. `@elevenlabs/react-native` is at `1.2.28`** (published 2026-09-29T13:02:26.241Z), with the same
+`next` = `1.0.0-rc.1` trap. Listed as "not checked" in section 1 above. Out of scope for the browser
+build, recorded for completeness.
+
+**11. TTS override model enum**, if section 5.1's `overrides.tts` is ever used — from S15:
+`eleven_turbo_v2`, `eleven_turbo_v2_5`, `eleven_flash_v2` (default), `eleven_flash_v2_5`,
+`eleven_multilingual_v2`, `eleven_v3_conversational`, `eleven_v4`, `eleven_v4_turbo`. The first pass
+left `overrides.tts.voiceId` with no model list.
+
+### Sources added by this pass
+
+| # | Source | URL |
+|---|---|---|
+| S15 | **Create agent (API ref)** — full agent config schema with defaults | https://elevenlabs.io/docs/eleven-agents/api-reference/agents/create.md |
+| S16 | **API Authentication** — normative `xi-api-key` requirement | https://elevenlabs.io/docs/api-reference/authentication.md |
+| S17 | Microphone troubleshooting (checked for a secure-context statement; has none) | https://elevenlabs.io/docs/help-center/troubleshooting/how-can-i-make-sure-my-microphone-is-working.md |
+| S18 | npm tarballs, extracted and read directly | https://registry.npmjs.org/@elevenlabs/react/-/react-1.16.0.tgz and https://registry.npmjs.org/@elevenlabs/client/-/client-1.26.0.tgz |
+
+**S15 is the most valuable page neither pass started from.** It is the single authoritative list of
+agent-config field names, types and defaults, and it answered three questions the first pass left
+open. Read it before touching agent configuration.

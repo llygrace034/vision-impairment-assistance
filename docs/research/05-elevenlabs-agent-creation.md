@@ -1369,3 +1369,227 @@ S19 verbatim setting: "**Enable call queuing** | Hold callers in a queue when th
 6. Set `agent.timezone`, `asr.keywords` (letter/benefit domain terms), and `first_message: ""` + `turn.initial_wait_time` if LetterLens should listen first.
 7. Flip the `platform_settings.overrides.conversation_config_override` booleans you need **before** relying on client-side overrides.
 8. Guard the 15 free minutes: always `endSession()`, use `conversation.text_only` for non-voice testing, and drop `max_duration_seconds` from 600 during development.
+
+---
+
+## Independent verification (adversarial pass)
+
+**Verification date:** 2026-10-03
+**Method:** every page below was re-fetched from scratch in this pass (raw `curl`, not from memory and not trusting the researcher's citations). Raw copies were diffed against the claims field-by-field. Where a claim's cited URL did not in fact contain the fact, that is recorded as a **misattributed citation** even when the fact itself checks out elsewhere.
+
+Pages re-fetched independently (all HTTP 200, 2026-10-03):
+
+| Ref | URL | Bytes |
+|---|---|---|
+| V1 | https://elevenlabs.io/docs/eleven-agents/operate/cli.md | 8436 |
+| V2 | https://raw.githubusercontent.com/elevenlabs/cli/main/README.md | 17676 |
+| V3 | https://raw.githubusercontent.com/elevenlabs/cli/main/cli/elevenlabs/workflow/project.rs | 26388 |
+| V4 | https://raw.githubusercontent.com/elevenlabs/cli/main/cli/elevenlabs/workflow/templates.rs | 14358 |
+| V5 | https://elevenlabs.io/docs/api-reference/agents/create.md | 177521 |
+| V6 | https://elevenlabs.io/docs/api-reference/tools/create.md | 56933 |
+| V7 | https://elevenlabs.io/docs/eleven-agents/customization/llm.md | 11941 |
+| V8 | https://elevenlabs.io/docs/eleven-agents/customization/llm/custom-llm.md | 30036 |
+| V9 | https://elevenlabs.io/docs/api-reference/authentication.md | 2161 |
+| V10 | https://elevenlabs.io/docs/eleven-agents/libraries/react.md | 21284 |
+| V11 | https://elevenlabs.io/docs/help-center/product/eleven-agents/how-much-does-eleven-agents-cost.md | 2851 |
+| V12 | https://elevenlabs.io/docs/eleven-agents/customization/tools/webhook-tools.md | 20741 |
+| V13 | https://api.elevenlabs.io/openapi.json | 2252803 |
+| V14 | https://registry.npmjs.org/@elevenlabs/cli/latest | — |
+| V15 | https://elevenlabs.io/pricing/agents | 715361 |
+| V16 | https://elevenlabs.io/docs/eleven-agents/guides/burst-pricing.md | — |
+| V17 | https://elevenlabs.io/docs/api-reference/agents/create (HTML) | — |
+
+### Verdict table
+
+| # | Claim | Status |
+|---|---|---|
+| 1 | CLI npm package / installs | **CONFIRMED** |
+| 2 | npm 1.4.0, bin, v0→v1 breaking change | **CONFIRMED** |
+| 3 | Command surface; no `sync`, no `watch` | **CONFIRMED** |
+| 4 | On-disk layout | **CONFIRMED** |
+| 5 | `agents.json` / `tools.json` schema; no `name` field | **CONFIRMED** |
+| 6 | Configs are the REST wire body verbatim | **CONFIRMED** |
+| 7 | `DEFAULT_TEMPLATE_JSON` + six templates | **CONFIRMED** (byte-for-byte) |
+| 8 | `prompt.tools` deprecated, use `tool_ids` | **CONFIRMED** |
+| 9 | `POST /v1/convai/tools`, body, flow | **CONFIRMED** (citation misattributed) |
+| 10 | Unwrapped CLI file vs wrapped REST body; timeouts | **CONFIRMED** |
+| 11 | `llm: "custom-llm"` + `CustomLLM` object | **CONFIRMED** |
+| 12 | `temperature: null` for custom LLMs | **CONFIRMED** |
+| 13 | Custom-LLM SSE contract | **CONFIRMED with a correction** (Responses API chunk format is different) |
+| 14 | `POST /v1/convai/agents/create` shape | **CONFIRMED** |
+| 15 | `xi-api-key` header; spec artefact; curl omits it | **CONFIRMED** (all three parts) |
+| 16 | Empty `first_message` + `turn.initial_wait_time` | **CONFIRMED** |
+| 17 | React SDK mute surface | **CONFIRMED** |
+| 18 | Overrides must be opted into | **CONFIRMED, and the inferred polarity is now PROVEN** |
+| 19 | "The **complete** `prompt.llm` enum" | **REFUTED as worded** — every ID listed is real, but the list is a ~15% subset of a ~110-value enum |
+| 20 | `backup_llm_config` / `cascade_timeout_seconds` | **CONFIRMED** (field names are on V5, not on the cited V7) |
+| 21 | Free 15 min / 4 concurrent; Starter 75/6; Creator 275/10 | **CONFIRMED** |
+| 22 | Billing on connection duration | **CONFIRMED** (one nuance omitted) |
+| 23 | `elevenlabs generate-skills` | **CONFIRMED** (verbatim) |
+| 24 | `conversation.file_input` exists, sub-schema unconfirmed | **First half CONFIRMED; second half REFUTED — the sub-schema IS on the same page the researcher cited** |
+
+### Claim-by-claim notes
+
+**1, 4, 23 — CONFIRMED verbatim from V1.** V1 says, word for word: "Homebrew (macOS) and Scoop (Windows) are the recommended install methods and ship a standalone binary." and "After installation, the `elevenlabs` command will be available globally in your terminal." The `generate-skills` tip in §2.2 of this note is reproduced exactly. Project tree matches exactly.
+*Small addition V1 makes that §2.3 of this note omits:* `elevenlabs auth login` — "This will open up a browser window to authenticate via OAuth. The CLI will verify the credentials and store them securely." So interactive login is OAuth, not key-paste. V2 separately documents the key path (`ELEVENLABS_API_KEY`, `.env`, or `--xi-api-key xi-...` per command).
+
+**2 — CONFIRMED.** V14 returned verbatim:
+```json
+{"name":"@elevenlabs/cli","version":"1.4.0","description":"CLI for elevenlabs","bin":{"elevenlabs":"bin/cli.js"}}
+```
+The v0→v1 migration note in V2 matches the quote in §2.1 word for word. Note the version is *not* in the README — it is only in the registry, so it will drift.
+
+**3 — CONFIRMED.** The command block in §2.4 of this note is a byte-for-byte copy of V2's. Grepping V2 and V1 for `watch` returns nothing at all, and every `sync`/`Sync` hit is prose ("push/pull sync", "Sync configs with ElevenLabs", "syncing them with ElevenLabs") or the V1 heading "Synchronization" — never a command. **No `agents sync`, no `--watch`, no `agents watch`. Confirmed.**
+
+**5 — CONFIRMED.** V3 matches the struct listing in §2.6 exactly, including `#[serde(rename = "type")]` on `ToolDefinition` and `skip_serializing_if = "Option::is_none"` on every optional. **There is no `name` field on an `agents.json` entry — confirmed.** V3's doc comment also states the design intent verbatim: "Entity **configs** are stored as raw wire JSON (`serde_json::Value`) and pushed verbatim, so they round-trip losslessly" and "Their `config` field is a *path*, not an inline config."
+
+**6 — CONFIRMED verbatim from V2:** "agent configs live as JSON on disk and sync to ElevenLabs. Pulled configs are stored as raw wire JSON and pushed back verbatim, so they round-trip losslessly." The inference that the Create-agent API reference is therefore the authoritative schema for `agent_configs/*.json` is sound — with one caveat, see "`turn.mode`" below.
+
+**7 — CONFIRMED byte-for-byte.** `DEFAULT_TEMPLATE_JSON` in V4 is identical to §2.8 of this note, including `turn: {turn_timeout: 7.0, silence_end_call_timeout: -1.0, mode: "turn"}`, `asr.provider: "scribe_realtime"`, `agent.first_message: ""`, `prompt.llm: "gemini-2.5-flash"`, `prompt.tool_ids: []`, `prompt.custom_llm: null`, `tts.voice_id: "cjVigY5qzO86Huf0OWal"`, `tts.model_id: "eleven_flash_v2"`. `TEMPLATE_OPTIONS` holds exactly six entries and `template_by_name` matches on exactly those six.
+
+**8 — CONFIRMED verbatim from V5** (`PromptAgentAPIModel-Input`):
+```
+- `tool_ids` (list of string, optional) — A list of IDs of tools used by the agent
+- `tools` (list of PromptAgentApiModelInputToolsItems, optional, deprecated) — A list of tools that the agent can use over the course of the conversation, use tool_ids instead
+```
+
+**9 — CONFIRMED, citation misattributed.** The flow quote is genuinely on V12, verbatim: "Edit `agent_configs/<agent-name>.json` and add the tool's ID to `conversation_config.agent.prompt.tool_ids`, then push:" followed by `elevenlabs agents push --agent "<agent-name>"`. But the endpoint, the "Add a new tool to the available tools in the workspace" description, the `{tool_config, response_mocks}` body and the `id` in the response are **not on V12 at all** — they are on V6. Both verified; cite V6 for the wire shape.
+
+**10 — CONFIRMED on both halves.** V12 shows the CLI file unwrapped (`type`/`name`/`description`/`api_schema` at top level of `tool_configs/get_weather.json`) and the API call wrapping the identical object in `tool_config`/`toolConfig` — on the same page, a few lines apart. V6 confirms both ranges verbatim:
+* webhook — `response_timeout_secs` (integer, optional, default: 20) — "Must be between 5 and 300 seconds (inclusive)."
+* client — `response_timeout_secs` (integer, optional, default: 20) — "Must be between 1 and 120 seconds (inclusive)."
+
+**11 — CONFIRMED verbatim from V5.** Every field, type, nullability, default and enum value in §3.2 matches `### CustomLLM` exactly. `custom-llm` is present in the `llm` enum. `CustomLlmApiKey` has its own stub type carrying only the description — i.e. **the docs never show the concrete shape of the key object anywhere**, only the prose `{'secret_id': '...'}` / `{'env_var_label': '...'}`. The researcher's gotcha stands and is correctly flagged.
+
+**12 — CONFIRMED verbatim from V5:** "`temperature` (double, optional, nullable, default: 0) — The temperature for the LLM. Defaults to 0. Set to null to omit the parameter from the LLM request entirely (useful for custom LLMs that reject the temperature field)."
+
+**13 — CONFIRMED with a correction that will break a Responses-API build.** V8 verbatim: "Both endpoints must return responses in SSE (Server-Sent Events) format with `Content-Type: text/event-stream`." and, for Chat Completions, "Each chunk must be formatted as `data: {json}\n\n` and the stream must end with `data: [DONE]\n\n`."
+**The claim then wrongly generalises that chunk format to both endpoints.** V8's Responses API section says something different, verbatim:
+> "Each chunk must be formatted as `event: {type}\ndata: {json}\n\n` and the stream must end with `data: [DONE]\n\n`. The minimum required events are:
+> * `response.output_text.delta` - for streaming text content
+> * `response.completed` - to signal completion"
+
+So: `data: {json}\n\n` is Chat-Completions-only; the Responses API needs a named `event:` line per chunk plus those two event types. Only `data: [DONE]\n\n` is shared.
+
+**14 — CONFIRMED verbatim from V5** — endpoint, `Content-Type: application/json`, the five residency servers, `conversation_config` as the only required body field, the three optional siblings plus `name`/`tags`, `200 → {agent_id}`, `422 → detail`, and `enable_versioning` (boolean, optional, default: true, deprecated) — "Deprecated: all agents are versioned. This parameter is ignored."
+
+**15 — CONFIRMED on all three parts, including the one that sounded like a guess.** V9 verbatim: "All API requests should include your API key in an `xi-api-key` HTTP header as follows:" / `xi-api-key: ELEVENLABS_API_KEY`, and "Every request to the API must include your API key". V13 (live spec, fetched and parsed in this pass) confirms on `/v1/convai/agents/create` POST:
+```json
+{"name":"xi-api-key","in":"header","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"description":"Your API key. This is required by most endpoints to access our API programmatically. You can view your xi-api-key using the 'Profile' tab on the website."}}
+```
+and `components.securitySchemes` is **absent** and top-level `security` is **null**. V17 (the rendered HTML) confirms the displayed curl sample verbatim and it does indeed omit the header:
+```bash
+curl -X POST https://api.elevenlabs.io/v1/convai/agents/create \
+     -H "Content-Type: application/json" \
+     -d '{
+  "conversation_config": {}
+}'
+```
+*Nuance worth knowing:* the HTML page's **Headers** panel does list `xi-api-key`, and the generated per-language snippets in the "Try it" panel **do** send it (e.g. Go `req.Header.Add("xi-api-key", "string")`, Ruby `request["xi-api-key"] = 'string'`). Only the top curl sample drops it. Also: the `.md` rendering's `## Examples` block shows the request body as `{}`, not `{"conversation_config": {}}` — two different renderings of the same operation. **Always send the header.**
+
+**16 — CONFIRMED verbatim from V5.** `first_message` (string, optional, default: ) — "If non-empty, the first message the agent will say. If empty, the agent waits for the user to start the discussion." and `initial_wait_time` (double, optional, nullable) — "How long the agent will wait for the user to start the conversation if the first message is empty. If not set, uses the regular turn_timeout."
+*Related field the note missed:* `disable_first_message_interruptions` (boolean, default false) — "If true, the user will not be able to interrupt the agent while the first message is being delivered."
+
+**17 — CONFIRMED verbatim from V10**, all four parts:
+* `useConversation({ micMuted })` under "Controlled State", with the comment `setMicMuted(true); // This will automatically mute the microphone`
+* "The provider supports `isMuted` and `onMutedChange` props for controlled mute state management, allowing you to persist mute state externally (e.g. across sessions)." → `<ConversationProvider isMuted={muted} onMutedChange={setMuted}>`
+* `useConversation()` returns `isMuted` ("whether the microphone is currently muted") and `setMuted` ("function to mute/unmute the microphone")
+* `useConversationInput()` → `const { isMuted, setMuted } = useConversationInput();`
+
+**18 — CONFIRMED, and the polarity the researcher flagged as "inferred, not quoted" is now PROVEN.** V10 confirms the client-side override surface verbatim: `overrides: { agent: { prompt: { prompt }, firstMessage, language }, tts: { voiceId }, conversation: { textOnly } }`. V5 settles the polarity — every boolean in the override-permission schemas is described as "**Whether to allow** overriding the X field" with **default: false**:
+```
+### AgentConfigOverrideConfig
+- `first_message` (boolean, optional, default: false) — Whether to allow overriding the first_message field.
+- `language` (boolean, optional, default: false) — Whether to allow overriding the language field.
+- `max_conversation_duration_message` (boolean, optional, default: false) — ...
+- `prompt` (PromptAgentAPIModelOverrideConfig, optional) — Configures overrides for nested fields.
+
+### PromptAgentAPIModelOverrideConfig
+- `prompt` (boolean, optional, default: false) — Whether to allow overriding the prompt field.
+- `llm` (boolean, optional, default: false) — Whether to allow overriding the llm field.
+- `tool_ids` (boolean, optional, default: false) — Whether to allow overriding the tool_ids field.
+- `native_mcp_server_ids` (boolean, optional, default: false) — ...
+- `knowledge_base` (boolean, optional, default: false) — ...
+
+### ConversationConfigOverrideConfig
+- `text_only` (boolean, optional, default: false) — Whether to allow overriding the text_only field.
+- `max_duration_seconds` (boolean, optional, default: false) — Whether to allow overriding the max_duration_seconds field.
+
+### TTSConversationalConfigOverrideConfig
+- `model_id` / `voice_id` / `supported_voices` / `stability` / `speed` (boolean, optional, default: false each)
+
+### ASRConversationalConfigOverrideConfig
+- `keywords` (boolean, optional, default: false) — Whether to allow overriding the keywords field.
+```
+**`true` = allowed. Confirmed, not inferred.** More overridables exist than the shipped template writes: `prompt.llm`, `prompt.tool_ids`, `prompt.knowledge_base`, `tts.model_id`, `tts.stability`, `tts.speed`, `conversation.max_duration_seconds`, `asr.keywords`, `agent.max_conversation_duration_message`. Also note `ConversationInitiationClientDataConfig-Input` carries two further gates the note does not mention: `enable_starting_workflow_node_id_from_client` and `enable_procedure_ids_from_client`, both default false — "if false, sending it fails conversation start."
+
+**19 — REFUTED AS WORDED. Read this one before writing any `llm` value.**
+Good news first: **every one of the 16 model IDs the researcher listed is real and present in the enum on V5** — `gemini-2.5-flash`, `gemini-3.5-flash`, `gemini-3.8-flash`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `claude-opus-5`, `claude-opus-5-5`, `claude-sonnet-5`, `claude-haiku-4-5`, `deepseek-v41-flash`, `glm-52`, `qwen36-35b-a3b`, `qwen35-397b-a17b`, `custom-llm`. None is hallucinated. And the `gpt-6.1-sol` catch is correct and verified: V7's prose table lists "GPT-6.1 Sol" under OpenAI while **no `gpt-6.1-sol` appears anywhere in the enum on V5** — a real docs inconsistency; trusting the enum is the right call.
+The word **"complete" is wrong**, and dangerously so: the actual enum holds roughly 110 values. Anything built on "the enum is these 16" (a validator, a dropdown, a TS union) will reject valid models. Models in the enum that the researcher's list omits include: `gpt-5.5`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.4`/`-mini`/`-nano`, `gpt-5.2`, `gpt-5.2-chat-latest`, `gpt-5.1`, `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `gpt-4.1`/`-mini`/`-nano`, `gpt-4o`, `gpt-4o-mini`, `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`, `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview`, `gemini-3.1-flash-lite`, `gemini-3.1-flash-lite-preview`, `gemini-3-pro-preview`, `gemini-3-flash-preview`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`, `gemini-1.5-pro`, `gemini-1.5-flash`, `claude-sonnet-5-5`, `claude-sonnet-4-6`, `claude-sonnet-4-5`, `claude-sonnet-4`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-3-7-sonnet`, `claude-3-5-sonnet`, `claude-3-5-sonnet-v1`, `claude-3-haiku`, `grok-beta`, `qwen3-4b`, `qwen3-30b-a3b`, `gpt-oss-20b`, `gpt-oss-120b`, `glm-45-air-fp8`, `watt-tool-8b`, `watt-tool-70b`, plus ~30 pinned/dated variants (`gpt-5.4-2026-03-05`, `claude-sonnet-4-5@20250929`, `gemini-2.5-flash-preview-09-2025`, …).
+**Treat `prompt.llm` as an open string validated server-side, and re-read the enum on V5 before hardcoding a set.** The identical enum is reused in three other places on V5: `PromptEvaluationCriteria.llm`, `BackupLLMOverride.order`, and the workflow-override variants.
+
+**20 — CONFIRMED, but the field names are not on the cited page.** V7 (the cited page) carries only the prose and the warning. The warning is verbatim: "Disabling backup LLMs means conversations will end abruptly if your primary LLM fails or becomes unavailable. This is strongly discouraged for production use." and the three options as prose: "**Default**: Uses ElevenLabs' recommended fallback sequence / **Custom**: Define your own cascading sequence of backup models / **Disabled**: No fallback (strongly discouraged for production)". **V7 contains neither `backup_llm_config` nor `cascade_timeout_seconds` nor `preference` anywhere.** Those are on V5, verbatim:
+```
+### PromptAgentApiModelInputBackupLlmConfig
+Configuration for backup LLM cascading. Can be disabled, use system defaults, or specify custom order.
+- `preference`: `default` (BackupLLMDefault)
+- `preference`: `disabled` (BackupLLMDisabled)
+- `preference`: `override` (BackupLLMOverride)
+  - `order` (list of enum, required)
+```
+and `cascade_timeout_seconds` (double, optional, default: 4) — "Time in seconds before cascading to backup LLM. Must be between 2 and 15 seconds." The discriminator values are the API's (`override`), not the UI's ("Custom") — don't send `"custom"`. Cite V5. A page neither pass has read exists at `/docs/eleven-agents/customization/llm/llm-cascading`.
+
+**21 — CONFIRMED from V15.** The page renders: Free `$0` / "15 minutes" / "4 Concurrent Calls"; Starter "75 minutes" / "6 Concurrent Calls"; Creator `$22` / "275 minutes" / "10 Concurrent Calls". V11 does defer, verbatim: "For details of how many minutes are included with each subscription plan, see our [ElevenAgents pricing.]" — so the researcher's "no docs page publishes these numerically" is right.
+V15 publishes more than the note captured, in a FAQ paragraph worth having verbatim: "Included call minutes and concurrent calls per plan: Free 15 minutes / 4 concurrent calls; Starter 75 minutes / 6; Creator 275 minutes / 10; Pro 1,238 minutes / 20; Scale 3,738 minutes / 30; Business 12,375 minutes / 40. Additional call minutes cost $0.08 per minute (burst pricing $0.16 per minute, double the standard rate, when you exceed your concurrency limit), and text messages cost $0.003 each. LLM usage is billed separately on top, based on the model you choose."
+**$0.003 per text message is the number that makes the text-only dev-loop mitigation concrete** — ~333 messages per dollar versus 15 total voice minutes.
+
+**22 — CONFIRMED verbatim from V11**, with the exact sentence slightly longer than quoted: "The length of the call is measured based on the connection duration. This includes the time from when you begin the call, to when you end the call or the window is closed. This is why the call itself may be shorter than the duration you are charged for." Also verbatim: "There is no cost to create your agent." and "Voice only calls are charged based on the call duration, with a 95% discount for periods of silence longer than 10 seconds."
+*Two nuances the note flattens.* (a) The 95% silence discount is documented for **voice-only and multimodal**; text-only has no duration component at all. (b) "no markup" is on V7, not V11, and V7 qualifies it: "ElevenLabs passes through third-party LLM costs at the provider's published rate, with no markup. Select Gemini and Claude models are aligned with Vertex AI regional (non-global) pricing, which is what US and EU traffic is billed at — **a 10% increase on input, output, and cache tokens**, matching Vertex regional rates." So LLM pass-through is not strictly at list price for Gemini/Claude on US/EU traffic.
+*Also:* V5 has `turn.retranscribe_on_turn_timeout` — "Disables silence discount billing for affected turns." Leaving it off protects the 95% discount.
+
+**23 — CONFIRMED verbatim from V1.** The quote in §2.2 is exact, including `--output-dir`.
+
+**24 — Half confirmed, half refuted, and the refuted half is this pass's biggest win.**
+`conversation.file_input` exists exactly as quoted on V5: "`file_input` (FileInputConfig, optional) — Configuration for file input (image/PDF uploads) during conversations." **But the claim that "the FileInputConfig sub-schema was NOT fetched and its fields are unconfirmed" is wrong — the sub-schema is on V5, the very page cited, about 280 lines above the field itself.** Verbatim:
+```
+### FileInputConfig
+
+- `enabled` (boolean, optional, default: true) — When enabled, users may attach images or PDFs in chat when the LLM supports multimodal input.
+- `max_files_in_memory` (integer, optional, default: 10) — Number of most-recent files kept in memory during a conversation. Older files are summarized and their bytes freed.
+- `max_files_per_conversation` (integer, optional, default: 10) — Total files a user can upload in one conversation. Uploads are billed per file. Use -1 for no limit, or a value >= max_files_in_memory.
+```
+Three things in there change the LetterLens design:
+1. **`enabled` defaults to `true`** — file input is on out of the box; no flag to flip to accept a letter.
+2. **"when the LLM supports multimodal input"** — the upload path is gated on the model. The CLI default `gemini-2.5-flash` is multimodal, but `prompt.llm` and letter-image support are now coupled: swapping to a text-only model silently kills the core feature. No doc page fetched in either pass lists which enum values are multimodal — **this is the one real remaining gap.**
+3. **"Uploads are billed per file"** — a third billing axis beyond minutes and messages, and unpriced on V15. Budget for it.
+V5 also shows a `FileInputConfigWorkflowOverride` type, so file input can be varied per workflow node.
+*Corroborating evidence the note missed:* `WidgetTextContents` on V5 has a full set of upload strings — `attach_file`, `remove_file`, `file_upload_error`, `file_type_unsupported` ("Followed by the list of accepted types"), `file_too_large`, `file_limit_reached` — so the shipped widget has a real file-attach UI, not just an API field.
+
+### Things the researcher missed that the build will need
+
+1. **`FileInputConfig` is fully documented.** See claim 24 above. This was logged as a blocker needing "its own research pass"; it does not.
+2. **Override polarity is proven, not inferred.** `true` = allowed, default `false`. The blocker that said "verify on first run" can be closed. See claim 18.
+3. **`turn.mode` is not a documented field.** The shipped `DEFAULT_TEMPLATE_JSON` writes `"mode": "turn"` inside `turn`, but `TurnConfig` on V5 has no `mode`. What it does have is `turn_model` (enum, default `turn_v3`, allowed `turn_v2`/`turn_v3`). Since configs are pushed as raw wire JSON, an unmodeled key rides along; it is probably ignored, but if a push ever 422s on `turn`, drop `mode` first. Do not invent values for it.
+4. **Four tool types, not two.** `ToolRequestModelToolConfig` on V6 is a union over `type`: **`client`, `mcp`, `system`, `webhook`.** The CLI's `tools.json` only tracks `webhook`/`client` (V3), so `system` tools (end call, language detection, transfer, skip turn, voicemail detection) and `mcp` are API-only — they cannot be registered through `elevenlabs tools add`.
+5. **Evaluation criteria must be objects, and bare strings return 500.** V4 carries this comment verbatim above the customer-service template: *"PromptEvaluationCriteria objects, not bare strings: `id`, `name` and `conversation_goal_prompt` are all required, and a list of strings makes the create endpoint return 500."* V5 confirms all three are required. A 500 (not a 422) means no useful validation message.
+6. **The `text-only` template flips a third field.** §2.9 lists only `conversation.text_only = true` and `widget.supports_text_only = true`. V4 also sets `platform_settings.overrides.conversation_config_override.conversation.text_only = false` — i.e. the text-only template **revokes** the client's ability to override text-only, the one override the default template grants. There is a unit test in V4 asserting exactly this (`text_only_flips_conversation_flag`). Matters for LetterLens: if the plan is "text-only for dev, client flips to voice", starting from the `text-only` template blocks it; start from `default`.
+7. **`tests.json` and the whole `elevenlabs tests` group are undocumented in the note.** V3: `TestsConfig { tests: Vec<TestDefinition> }`, `TestDefinition { config: String, type: Option<String>, id: Option<String> }`. V2 documents `tests add <name> [--template basic-llm|tool|conversation-flow|customer-service]`, `tests templates list`, `tests push`/`pull`/`delete`, attachment via `platform_settings.testing.attached_tests`, and auto-discovery: `tests push` "scans `--config-dir` recursively for `.json` files that look like tests (a `chat_history` array or a `success_condition` string) and registers them in `tests.json` before pushing." **This is the cheapest way to regression-test agent logic without burning voice minutes.**
+8. **Reasoning controls exist on `prompt` and default off.** V5: `reasoning_effort` (enum, nullable; `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`), `thinking_budget` (integer, nullable; "Use 0 to turn off"), `enable_reasoning_summary` (boolean, default false; "Not ZRM compatible"). V7 warns: "Start with a lower budget or effort for live voice agents because extra thinking can delay turn-taking."
+9. **`built_in_tools` and `enable_parallel_tool_calls` are separate from `tool_ids`.** V5: `built_in_tools` (BuiltInTools-Input) — "Built-in system tools to be used by the agent", and `enable_parallel_tool_calls` (boolean, **default true**) — "Not supported by all models." System tools do not need a `POST /v1/convai/tools` round trip.
+10. **Max system prompt size is 2MB** (V7, verbatim): "The maximum system prompt size is 2MB, which includes your agent's instructions, knowledge base content, and other system-level context."
+11. **Turn-detection fields the note's §2.11 omits** (all V5): `speculative_turn` (default false) — "starts generating LLM responses during silence before full turn confidence is reached, reducing perceived latency. May increase LLM costs."; `retranscribe_on_turn_timeout` (default false, kills the silence discount); `turn_model` (default `turn_v3`); `interruption_ignore_terms` + `interruption_ignore_term_languages` + `merge_with_default_ignore_terms`; `transcribe_on_disabled_interruptions`; `soft_timeout_config` — "Provides immediate feedback during longer LLM responses" (useful while a letter is being read).
+12. **Agent-level fields the note omits** (V5 `AgentConfigAPIModel-Input`): `disable_first_message_interruptions`, `max_conversation_duration_message` ("the message the agent will send when max conversation duration is reached" — pair this with a lowered `max_duration_seconds` so the dev cap is not a silent cut-off), `hinglish_mode`, `text_behavior_overrides`.
+13. **Burst pricing is documented and resolves the open blocker.** V16: bursting gives "up to 3 times your normal concurrency limit, with excess calls charged at double the standard rate", capped — "For non-enterprise customers, the maximum burst currency can not go above 300" — burst calls are "deprioritized… for speech-to-text and text-to-speech processing", and over-capacity calls are "rejected with an error, unless call queueing is enabled". It is set per agent at `platform_settings.call_limits.bursting_enabled`, which **the shipped default template sets to `true`**. V15's per-minute table does carry a "Free / Pay as you go" column with a burst row at `$0.160`, so bursting is priced for free/PAYG; with a 4-call concurrency limit it is near-irrelevant for LetterLens, but **`bursting_enabled: true` in the template means a runaway client could burst to 12 concurrent calls at 2x rate.** Consider setting it `false` for a hackathon agent.
+14. **`optimize_streaming_latency` deprecation re-confirmed.** V5: "Deprecated: this field is a no-op and is ignored." V4 still writes `3`. Harmless, but it means **the shipped template is not clean against the current schema** — a second reason (with `turn.mode`) not to treat `DEFAULT_TEMPLATE_JSON` as schema-authoritative. Prefer `minimal` plus explicit fields.
+15. **`ignore_default_personality` really does disagree.** V5: "(boolean, optional, nullable, **default: true**) — Whether to remove the default personality lines from the system prompt." V4 writes `false`. Confirmed divergence — set it explicitly.
+16. **`prompt.timezone` is real and the warning is verbatim** (V5): "Timezone for displaying current time in system prompt. If set, the current time will be included in the system prompt using this timezone. Must be a valid timezone name (e.g., 'America/New_York', 'Europe/London', 'UTC'). Recommended for accurate time-aware responses; without this, the agent has no knowledge of the current date/time unless you provide it via dynamic variables or tools, which can lead to incorrect or hallucinated time references." The blocker is well-founded; `timezone` is not in the shipped template, so it must be added by hand.
+17. **CLI conveniences not in the note** (V2): `elevenlabs residency <region>` (persisted in `~/.elevenlabs/config.json`, applies to every command); `--dry-run` is a **global** flag on every operation, not just `agents push` ("Validate the request locally and print the HTTP request without sending it"); `--json <JSON|->`, `--params`, `--format json|table|yaml|csv`, `--page-all`; `elevenlabs components add <name>` for ElevenLabs UI; `elevenlabs say`; `elevenlabs completion <shell>`; and a full command reference at `./reference.md` in the repo. Also `--intent` sends an `X-Agent-Intent` header and **drops values containing credentials or absolute paths** — fine, but do not put letter content in it.
+18. **Pages neither pass has read, in rough priority order:** `/docs/eleven-agents/customization/llm/llm-cascading` (the backup-LLM mechanics behind claim 20), `/docs/eleven-agents/operate/hosted-mcp` (agent management with no install), `/docs/eleven-agents/guides/call-queueing`, `/docs/eleven-agents/customization/privacy/zrm`, `/docs/api-reference/tokens/create` (single-use tokens — the right way to start a conversation from LetterLens's browser client without shipping `xi-api-key`), and `/docs/eleven-agents/customization/llm/optimizing-costs`.
+
+### Net assessment
+
+This is an unusually accurate research pass. Of 24 claims, 22 hold exactly as written, and every verbatim JSON block, field name, enum value and quoted sentence I re-fetched matched character for character — including the two that most looked like model-family hallucinations (`gpt-6-astra`/`claude-opus-5`/`glm-52` are all genuinely in the enum, and the `gpt-6.1-sol` docs-vs-enum inconsistency is a real find). **No hallucinated package name, no hallucinated endpoint, no hallucinated field, and no capability asserted beyond what the docs grant.** The researcher's habit of flagging its own uncertainty (`turn.mode`, the override polarity, the custom-LLM `url` suffix) pointed straight at the two genuinely soft spots.
+
+Two defects matter before code is written. **Claim 19's word "complete" is the dangerous one** — the real `prompt.llm` enum is ~110 values, not 16, so any validator or type built from that list rejects valid models; treat `llm` as an open string. **Claim 13 generalises the Chat Completions SSE chunk format to the Responses API, which uses `event: {type}\ndata: {json}\n\n` instead** — that would silently break a `/v1/responses` custom-LLM server. Everything else is citation hygiene: claims 9 and 20 are true but sourced to pages that do not contain them (use `tools/create.md` and `agents/create.md` respectively).
+
+Against the stated blockers: nine of eleven are confirmed and well-founded. Two can now be closed — **override polarity is documented (`true` = allowed, default `false`)**, and **`FileInputConfig` is not an open gap; it was on the page already cited**. The residual unknown is narrower and sharper than the blocker list suggests: not "how do letters reach the agent", but **which `prompt.llm` values satisfy "when the LLM supports multimodal input"** — no page fetched in either pass answers that, and the whole product depends on it. Add to that two newly surfaced build facts: **uploads are billed per file** (a third billing axis, unpriced anywhere) and **text messages cost $0.003 each**, which is what makes the text-only dev loop the correct mitigation for a 15-minute voice budget.
