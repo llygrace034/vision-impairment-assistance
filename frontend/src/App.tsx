@@ -1,122 +1,162 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useConversation } from "@elevenlabs/react";
+import "./App.css";
 
-function App() {
-  const [count, setCount] = useState(0)
+const BACKEND = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:8000";
+
+// The frame the agent reads is downscaled to this width before upload. Full
+// resolution buys no accuracy: 1024px read all three test letters correctly,
+// reference numbers and times included.
+const CAPTURE_WIDTH = 1024;
+
+export default function App() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [lastRead, setLastRead] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+
+  /** Grab the current video frame as a downscaled JPEG. */
+  const captureFrame = useCallback(async (): Promise<Blob | null> => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return null;
+
+    const scale = CAPTURE_WIDTH / video.videoWidth;
+    const canvas = document.createElement("canvas");
+    canvas.width = CAPTURE_WIDTH;
+    canvas.height = Math.round(video.videoHeight * scale);
+    canvas.getContext("2d")!.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    return new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/jpeg", 0.75),
+    );
+  }, []);
+
+  /**
+   * The client tool the agent calls. Because this runs in the browser, the
+   * frame is already here -- there is nothing to correlate against a separate
+   * webhook request, which is why this is a client tool and not a server tool.
+   *
+   * Must return a string: ClientToolResult is `string | number | void`, and an
+   * object would not reach the agent. Any failure is returned as a sentence the
+   * agent can say out loud, never thrown, because a throw makes it apologise
+   * with no idea what went wrong.
+   */
+  const readDocument = useCallback(async (): Promise<string> => {
+    setReading(true);
+    try {
+      const frame = await captureFrame();
+      if (!frame) return "The camera is not ready yet. Please try again in a moment.";
+
+      const form = new FormData();
+      form.append("image", frame, "frame.jpg");
+
+      const res = await fetch(`${BACKEND}/read_document`, {
+        method: "POST",
+        body: form,
+      });
+      if (!res.ok) return "I had trouble reading that. Please try again.";
+
+      const data = await res.json();
+      const text: string = data.text ?? "I could not read that.";
+      setLastRead(text);
+      return text;
+    } catch {
+      return "I could not reach the reader. Please check the connection and try again.";
+    } finally {
+      setReading(false);
+    }
+  }, [captureFrame]);
+
+  const conversation = useConversation({
+    clientTools: { read_document: readDocument },
+    onError: (message) => setCameraError(String(message)),
+  });
+
+  const { status, isSpeaking, startSession, endSession } = conversation;
+  const connected = status === "connected";
+
+  // Camera starts on mount so the user can aim the letter before connecting.
+  useEffect(() => {
+    let cancelled = false;
+    navigator.mediaDevices
+      .getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1920 } },
+        audio: false,
+      })
+      .then((stream) => {
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      })
+      .catch((e) => setCameraError(`Camera unavailable: ${e.message}`));
+
+    return () => {
+      cancelled = true;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const start = useCallback(async () => {
+    setCameraError(null);
+    try {
+      // Mic permission must be granted before the session opens.
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      const res = await fetch(`${BACKEND}/signed-url`);
+      if (!res.ok) throw new Error(`token request failed (${res.status})`);
+      const { token } = await res.json();
+      startSession({ conversationToken: token, connectionType: "webrtc" });
+    } catch (e) {
+      setCameraError(e instanceof Error ? e.message : String(e));
+    }
+  }, [startSession]);
+
+  const statusLine = reading
+    ? "Reading the letter…"
+    : isSpeaking
+      ? "LetterLens is speaking…"
+      : connected
+        ? "Listening — hold up a letter and ask what it says"
+        : status === "connecting"
+          ? "Connecting…"
+          : "Not connected";
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <main className="app">
+      <h1>LetterLens</h1>
 
-      <div className="ticks"></div>
+      <div className="viewport">
+        <video ref={videoRef} autoPlay playsInline muted aria-label="Camera preview" />
+        {reading && <div className="reading-badge">Reading…</div>}
+      </div>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      {/* aria-live so a screen reader announces state changes without focus. */}
+      <p className="status" role="status" aria-live="polite">
+        {statusLine}
+      </p>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      <button
+        className={connected ? "btn btn-stop" : "btn btn-start"}
+        onClick={connected ? endSession : start}
+      >
+        {connected ? "Stop" : "Start talking"}
+      </button>
+
+      {cameraError && (
+        <p className="error" role="alert">
+          {cameraError}
+        </p>
+      )}
+
+      {lastRead && (
+        <section className="transcript" aria-label="What the camera read">
+          <h2>Last read</h2>
+          <pre>{lastRead}</pre>
+        </section>
+      )}
+    </main>
+  );
 }
-
-export default App

@@ -1,0 +1,17 @@
+{
+  "name": "note",
+  "profile": "typical",
+  "seed": 5,
+  "size_mm": [
+    76,
+    76
+  ],
+  "frame_bytes": 25600,
+  "truth": null,
+  "result": {
+    "http": 200,
+    "wall_s": 6.05,
+    "text": "TYPE: Handwritten note\n\nMum -\nDentist moved to Tues\n14th, 9:30\nBring the blue form!\n- Priya",
+    "elapsed_s": 4.84
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "tool_config": {
+    "type": "client",
+    "name": "read_document",
+    "description": "Read the letter the user is currently holding up to the camera. Call this before saying anything about a letter's contents. Returns the sender, subject, any dates, deadlines, amounts, reference numbers and phone numbers exactly as printed. Takes no parameters: it always reads whatever the camera can see right now.",
+    "expects_response": true,
+    "response_timeout_secs": 120,
+    "pre_tool_speech": "force",
+    "tool_call_sound_behavior": "always",
+    "interruption_mode": "allow",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  }
+}

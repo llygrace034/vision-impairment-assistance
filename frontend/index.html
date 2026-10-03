@@ -3,8 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- No maximum-scale / user-scalable=no: a low-vision user pinch-zooming
+         the status text is the expected behaviour, not an edge case. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+
+    <title>LetterLens</title>
+    <meta
+      name="description"
+      content="LetterLens reads a physical letter aloud. Hold the letter up to your phone camera and ask what it says — a voice agent reads it back and tells you what matters."
+    />
+
+    <!-- Matches the app background in each scheme so the phone browser chrome
+         does not flash white against the dark UI. -->
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)" />
   </head>
   <body>
     <div id="root"></div>

@@ -1,0 +1,17 @@
+{
+  "name": "medicine",
+  "profile": "typical",
+  "seed": 5,
+  "size_mm": [
+    90,
+    55
+  ],
+  "frame_bytes": 31844,
+  "truth": null,
+  "result": {
+    "http": 200,
+    "wall_s": 7.0,
+    "text": "TYPE: Medication label\n\nAmoxicillin 250mg capsules\nTake ONE capsule THREE times a day for 7 days\nPatient: J. Okafor\nQty: 21\nKeep out of reach of children",
+    "elapsed_s": 5.59
+  }
+}

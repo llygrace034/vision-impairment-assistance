@@ -15,10 +15,35 @@ Read this **before** the event. On the day, you want Section 5 printed and Secti
 
 Written 2026-10-03 against commit `39b8655`, then revised the same day against
 `docs/research/08-gemma-live-api-test-results.md` — **live HTTP testing against a real API key**,
-which overturned the model pin, the latency budget and several assumptions that were load-bearing
+which overturned the model pin — twice, §2 then §§6.1/10 — and which, contrary to its own first
+reading, left the 8-second latency budget standing
 for this file. The revised material is §§0.1–0.4, 3.1a, and the marked passages in §§1.5, 2.4, 3.1,
 3.3, 4.5, 5 and Appendix A. **Where this file and the docs-based notes 01 and 07 disagree, note 08
 wins.**
+
+**Revised again 2026-10-03, this time against the working tree rather than against research notes.**
+The backend and frontend now exist and have been exercised end to end. Two premises this file was
+built on are gone, and one number changed:
+
+- **There is no tunnel.** `[REPO]` `read_document` is an ElevenLabs **client** tool
+  (`agent/tools/read_document.json`: `"type": "client"`), so the *browser* calls the backend
+  directly — `frontend/src/App.tsx` does a template-literal `fetch` of `${BACKEND}/read_document` with
+  `BACKEND = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:8000"` — and ElevenLabs' cloud
+  never reaches the laptop. `ngrok`, `cloudflared`, `PUBLIC_BASE_URL` and `TOOL_WEBHOOK_SECRET` are
+  **not used by this MVP at all**. Every tunnel instruction below is dead; it is struck out or
+  rewritten. Treat this as a demo-risk **win** and say it plainly: a tunnel is a thing that dies
+  quietly mid-demo, and there is no longer one to die.
+- **There is one tool, not six.** `[REPO]` Built and working: **`read_document`** (client). `App.tsx`
+  registers exactly `clientTools: { read_document: readDocument }`; `backend/app.py` exposes exactly
+  `/health`, `/signed-url` and `/read_document`. **NOT BUILT:** `draft_reply`, `add_event`,
+  `set_reminder` — no endpoint, no client-tool registration, no `.ics` generation, no calendar card,
+  no reminder card. `end_call` and `skip_turn` are native ElevenLabs system tools needing no code,
+  but no file in the repo shows them configured. Anything below that treats the unbuilt three as
+  working features is now marked **NOT BUILT**.
+- **The user-visible read is ~8 seconds, not 3.7–4.5.** Note 08 §10's 3.7–4.5 s is the *raw model
+  call*. Measured end to end through the running backend on 2026-10-03: **8.1 s, 7.6 s, 8.7 s**,
+  HTTP 200 on the first attempt for all three letters. §0.2 has the tail and the abandon time, which
+  is now **35 s**, not 15.
 
 ## Provenance legend
 
@@ -37,81 +62,124 @@ Every non-obvious claim is tagged. Do not treat an unverified tag as fact.
 
 ## 0. What exists right now, and the four things that kill the demo outright
 
-`[REPO]` At commit `39b8655`, matching what `docs/submission.md` Section D already records:
+> **⚠️ SUPERSEDED as written at commit `39b8655`.** That version of this section said `App.tsx` was
+> the unmodified Vite starter, `backend/` held only `requirements.txt`, and `agent/*.json` did not
+> exist. All three are now false — the MVP is built. The inventory below replaces it.
 
-- `frontend/src/App.tsx` is **the unmodified Vite + React starter** — counter button, Vite and React
-  logos, links to Discord and Bluesky. No camera, no transcript, no conversation UI.
-- `frontend/package.json` dependencies are **`react` and `react-dom` only**. No `@elevenlabs/react`.
-- `backend/` contains **only `requirements.txt`**. No FastAPI app, no webhook handlers.
-- `agent/persona-prompt.md` references `agent/*.json`; **no such file exists.**
-- `frontend/index.html` has `<title>frontend</title>`.
+`[REPO]` What exists in the working tree on 2026-10-03:
 
-So §1 and §4 below are **requirements to build against**, not an audit of something that exists.
-§2 and §3 are real right now, because the printed paper and the venue network do not care whether
-the app is finished.
+- **`backend/app.py`** — FastAPI, three routes and no more: `GET /health` (reports which keys
+  loaded), `GET /signed-url` (mints a short-lived ElevenLabs conversation token so
+  `ELEVENLABS_API_KEY` never reaches the browser), `POST /read_document` (one camera frame in,
+  `{"text": ..., "elapsed_s": ...}` out). No webhook handlers, because there are no webhook tools.
+- **`frontend/src/App.tsx`** — camera, conversation UI, and `clientTools: { read_document:
+  readDocument }`. It fetches `/signed-url` and posts frames to `/read_document` on
+  `http://127.0.0.1:8000` by default.
+- **`agent/tools/read_document.json`** — the one tool. `"type": "client"`,
+  `expects_response: true`, `response_timeout_secs: 120`, `pre_tool_speech: "force"`,
+  `tool_call_sound_behavior: "always"`, `interruption_mode: "allow"`, and **no parameters** — it
+  reads whatever the camera sees now.
+- **NOT BUILT:** `draft_reply`, `add_event`, `set_reminder`, and therefore no `.ics` file, no
+  calendar card and no reminder card. Do not demo them and do not keep a recovery step for them.
+- **What `read_document` actually returns:** not the nine-field structured object in
+  `skills/letter-reader/references/output-schema.md`. `backend/app.py` returns `{"text": ...,
+  "elapsed_s": ...}` where the text is at most six plain lines — `FROM:`, `ABOUT:`, `WHEN:`,
+  `DEADLINE:`, `REF:`, `CONTACT:`, each with a value or `NONE` — and the agent summarises that in
+  its own voice. **The structured-object contract in `output-schema.md` is aspirational, not
+  implemented.**
+
+So §1 and §4 below are still **requirements to build against** rather than an audit — the UI exists
+but has not been audited against them. §2 and §3 are real right now, because the printed paper and
+the venue network do not care how finished the app is.
 
 ### 0.1 The model pin — **FIXED**
 
-`[REPO]` `.env.example` now pins `GEMMA_MODEL=gemma-4-31b-it` and
-`GEMMA_VISION_MODEL=gemma-4-31b-it`, with a comment citing
-`docs/research/08-gemma-live-api-test-results.md` §2 and noting that vision is verified working on
-that ID specifically. It also stages two commented-out lines for the split-path architecture
-(§0.2): `#CHAT_MODEL=gemini-2.5-flash-lite` and `#VISION_TIMEOUT_MS=90000`, inert until the backend
-reads them.
+`[REPO]` `.env.example` now pins `GEMMA_MODEL=gemma-4-26b-a4b-it` and
+`GEMMA_VISION_MODEL=gemma-4-26b-a4b-it`, with an inline head-to-head citing
+`docs/research/08-gemma-live-api-test-results.md` §§6.1 and 10 — vision is verified on that ID
+against all three letters in `test-letters/`. `LLM_TIMEOUT_MS=8000` is unchanged. The two
+split-path lines (`#CHAT_MODEL=gemini-2.5-flash-lite`, `#VISION_TIMEOUT_MS=90000`) are still in
+the file but are marked **no longer needed** and must stay commented out.
 
 **What it used to be, and why it mattered.** Both values were `gemma-3-27b-it`. `[RESEARCH]` Note 08
 §2 records the live result: a flat **404**, verbatim *"models/gemma-3-27b-it is not found for API
 version v1beta, or is not supported for generateContent"*. The repo's defaults could never have
 worked on any request. Earlier drafts of this file and of `docs/submission.md` said the fix was
-`gemma-4-26b-a4b-it`, following note 01's recommendation; **that is superseded.** Note 08 verified
-vision specifically on `gemma-4-31b-it`, and the 26B MoE's apparent speed advantage came from a
-confounded test (`maxOutputTokens: 1`), which note 08 §6.1 says explicitly should not be used to
-pick a model. `gemma-4-26b-a4b-it` remains useful as a second 30 RPM quota bucket, since the free
-tier is scoped per project *per model*.
+`gemma-4-31b-it`, on the strength of the §3 vision call; **that is superseded.** Note 08 §6.1 removed
+the `maxOutputTokens: 1` confound with a serial cross at concurrency 1 — `gemma-4-26b-a4b-it`
+answered **8/8 in a 2.0 s median** with thinking active and output uncapped, while `gemma-4-31b-it`
+took **24.9 s** on a single capped token — and §10 then read all three letters on 26b in
+**3.7–4.5 s, 3/3 first attempt, verbatim-correct**. Note 01's recommendation was right for the right
+reason. `gemma-4-31b-it` remains useful only as a second 30 RPM quota bucket, since the free tier is
+scoped per project *per model*.
 
-**What is still open.** The pin is right and the model works at the API level, but **nobody has made
-a `read_document` call through the application stack**, because the backend does not exist yet. The
-demo-day consequence of a bad pin has not changed: `read_document` fails on every single attempt, in
-a way that looks exactly like a network failure from the stage, and you burn the whole "if it
-breaks" budget on a problem no amount of re-holding the letter can fix. **Get one real 200 through
-the backend, with a real frame, before demo day.** Item 1 in the T-60 checklist. Per instruction I
-did not read or touch `.env.local` — check the pin there too.
+**What was still open is now closed.** ✅ The application path has been exercised: `POST
+/read_document` against the running backend with the full-resolution PNGs in `test-letters/`
+returned **HTTP 200 on the first attempt for all three letters, in 8.1 s, 7.6 s and 8.7 s**, every
+field verbatim-correct against the known-good `.txt` transcripts. The demo-day consequence of a bad
+pin has not changed, though: `read_document` would fail on every single attempt, in a way that looks
+exactly like a network failure from the stage, and you would burn the whole "if it breaks" budget on
+a problem no amount of re-holding the letter can fix. **So still get one real 200 through the backend,
+with a real frame, at T-60.** Item 1 in the T-60 checklist. Per instruction I did not read or touch
+`.env.local` — check the pin there too.
+
+`[REPO]` **One correction to the sentence above about `LLM_TIMEOUT_MS=8000`.** It is still in
+`.env.example`, but **`backend/app.py` never reads it**, and that is correct rather than an
+oversight: a *healthy* end-to-end read exceeds 8 s (8.1–8.7 s measured), so an 8-second gate would
+kill good reads. The vision call is bounded by the backend's own
+`httpx.Timeout(60.0, connect=10.0)`. Do not "fix" this by wiring `LLM_TIMEOUT_MS` into the vision
+path.
 
 `[REPO]` Two good signs already in `.gitignore`: `captures/` and `latency-*.jsonl`. **Ship the
-latency log.** With a model that takes 20–57 seconds (§0.2) this stops being nice-to-have: it is the
-only thing that tells you at T-60 what your actual distribution looks like tonight, rather than
-finding out mid-script.
+latency log.** The model call is 3.7–4.5 s (§0.2), but that figure excludes base64 encoding, the
+upload of a ~0.5 MB frame, retries and TTS — which is exactly why the measured end-to-end figure is
+~8 s. The log is what tells you at T-60 what tonight's distribution looks like, rather than finding
+out mid-script.
 
-### 0.2 The read is slow and fails half the time — plan the demo around it
+### 0.2 The read is ~8 seconds, with a tail — and here is the number to rehearse against
 
-`[RESEARCH]` This is the single biggest change since this document was first written, and it reaches
-into every other section. Note 08 is **live HTTP against a real key**; every figure below came off
-the wire on 2026-10-03.
+`[RESEARCH]` + `[REPO]` This section was once the biggest risk in the document. It is now a managed
+one, and the reason is worth knowing: the alarming figures belonged to one model. Note 08 is **live
+HTTP against a real key**; the measured end-to-end row is **live HTTP against the running backend**.
+Everything below came off the wire on 2026-10-03.
 
 | Measurement | Value |
 |---|---|
-| Successful Gemma latency, trivial text | **19.9 – 35.1 s** |
-| Structured extraction | **42.6 s** |
-| **Vision, on our own `test-letters/01-hospital-appointment.png`** | **56.8 s** |
-| Failure rate, **strictly serial**, well inside the 30 RPM free-tier quota | **~50 %** (6 of 12 succeeded) |
-| Failure rate at 10-way concurrency | **26 of 40 returned `500 INTERNAL`** |
-| Calls that completed inside 8 s | **zero** |
+| **End to end, `POST /read_document`, all three letters in `test-letters/`** | **8.1 s, 7.6 s, 8.7 s — HTTP 200 first attempt 3/3, verbatim-correct** |
+| **The tail, five consecutive calls** (recorded in `backend/app.py`'s own comments) | **5.1, 5.5, 8.2, 14.4, 30.5 s** |
+| Raw model call only, vision, on the pinned `gemma-4-26b-a4b-it` | 3.7–4.5 s (note 08 §10) — **a component, not the user-visible figure** |
+| Raw model call only, text, serial, 8 calls, thinking active, output uncapped | 2.0 s median, max 2.5 s, 8/8 (§6.1) |
+| Failures across note 08 §§6.1 and 10 | 0 in 19 calls |
+| 40 requests at 8-way concurrency | 33×200, 7×429, **0×500** (§1.1) |
+| Rejected alternative, `gemma-4-31b-it` | 20–57 s, ~50 % serial failure rate, 36.8–56.8 s on vision (§§6, 10) |
 
-Three consequences, in order of how much they will hurt you:
+**Budget ~8 seconds per read.** The gap between the 3.7–4.5 s model call and the ~8 s the presenter
+actually waits is base64 encoding and the upload of a ~0.5 MB frame — real work that happens before
+the model sees anything. **Quote 8 s, never 3.7–4.5 s, as the user-visible number.**
 
-1. **`LLM_TIMEOUT_MS=8000` cannot hold for a Gemma call.** Not "is tight" — *cannot hold*. Every
-   success exceeded it. The human has adopted note 08 §7 **option 1, split the paths**: fast
-   conversational turns on `gemini-2.5-flash-lite` inside the 8 s budget, and `read_document` on
-   `gemma-4-31b-it` with `VISION_TIMEOUT_MS=90000` and a spoken *"let me read that for you, one
-   moment"* covering the wait. The point is containment — a slow or failed read degrades **one
-   feature** instead of the whole conversation, so the agent can still talk to you and apologise.
-2. **A long silence is now NORMAL, which is a demo-operations problem** (§3.1a). You can no longer
-   tell a healthy read from a dead backend by waiting, so you need discriminators and a pre-agreed
-   abandon time.
-3. **Retries are mandatory, and they are expensive.** At a ~50 % per-call failure rate you will
-   retry roughly every other read, and a retry costs another 20–57 s. Two consecutive failures is a
-   ~25 % event. `docs/submission.md` Section B now budgets the demo at ~2 minutes rather than 90
-   seconds because of this; read that reality box before you rehearse.
+**And read the tail row again, because it is the one that matters on stage.** 5.1, 5.5, 8.2, 14.4,
+30.5 s across five consecutive calls is a *tail* problem, not an average one. The mean is reassuring
+and the 95th percentile is what the room sees. **So: ten seconds of silence is normal, and demo-day
+abandon time is 35 seconds.**
+
+Three consequences, in order of how much they change the plan:
+
+1. **`LLM_TIMEOUT_MS=8000` must NOT gate the vision path**, because a *healthy* read exceeds it.
+   `backend/app.py` is already correct here — it never reads the variable and bounds the call with
+   its own `httpx.Timeout(60.0, connect=10.0)`. Note 08 §7 **option 1, split the paths, is
+   superseded by §10 and must not be built**: one Gemma model serves both paths. The spoken *"let me
+   read that for you, one moment"* stays, and at ~8 s it is earning its keep as latency cover as
+   well as accessibility. Containment holds either way: `read_document` is the only path to the
+   letter, so a failed read degrades **one feature** instead of the whole conversation, and the agent
+   can still talk to you and apologise.
+2. **A long silence is the normal case for the first ten seconds, and a symptom after thirty-five.**
+   You want the discriminators in §3.1a, and a pre-agreed abandon time — **set it at 35 s.** Earlier
+   drafts said 75 s (from `gemma-4-31b-it`) and then 15 s (from the model-call figure). Both are
+   wrong: 15 s would abandon a read that was going to land.
+3. **Retries are still mandatory, and they are affordable but not free.** 26b went **19/19** across
+   note 08 §§6.1 and 10 with no 5xx, and took 40 requests at 8-way concurrency with zero 500s
+   (§1.1), so budget for 429s rather than failures. But a retry costs you another ~8 s, not four —
+   so **take one and move on.**
 
 `[RESEARCH]` Two mechanical rules the backend must follow, both from note 08 §§1.1 and 6, both of
 which affect what you see on stage: **send requests strictly serially** (concurrency manufactures
@@ -170,8 +238,10 @@ on it raises. The schema is accepted and silently not honoured.
 failure that looks identical to the network ones in §3 but happens on a perfectly good read, and
 which a retry will reproduce roughly as often as not depending on whether the model felt like
 fencing its output. The backend must strip fences before parsing and validate the shape server-side
-regardless. Note 01's recommended alternative — a single forced function call — is listed **PENDING
-/ unverified** in note 08 §8. Do not count on it before demo day.
+regardless. Note 01's recommended alternative — function calling — is **verified working** in note
+08 §8.4 (one declared `functionDeclarations` tool, clean typed args, no fence), so it is the better
+target than fence-stripping if there is time before demo day. Note that §8.4 let the model *choose*
+the tool; forcing it via `tool_config` is untested on Gemma, so keep a text-response fallback.
 
 ---
 
@@ -278,7 +348,7 @@ on the paper.
     failure, is a very plausible way to lose the demo.
 - **Fullscreen, no chrome:**
   `chrome.exe --app=http://localhost:5173 --start-fullscreen --user-data-dir="C:\demo-profile"`.
-  `--app=` removes the omnibox — so the tunnel URL never appears on the projector — and the tab strip.
+  `--app=` removes the omnibox — so no URL appears on the projector — and the tab strip.
 - **Use a persistent dedicated profile, created at home.** A fresh `--user-data-dir` has **no stored
   microphone permission**, so you get a permission dialog live on stage — which `docs/submission.md`
   Section B already lists as a thing that "eats five seconds". Create `C:\demo-profile` beforehand,
@@ -334,7 +404,7 @@ the room is bigger than 20 people". Two things it does not cover:
   agent cannot resume a cut-off sentence**. In a feedback loop the agent cuts itself off mid-word
   and never recovers the sentence — and it will do it during the window Section B calls "the agent's
   moment" (≈0:58–1:13 in the reworked script), which is the one stretch of the demo you cannot
-  afford to lose, and which you will have just spent forty-five seconds waiting for.
+  afford to lose, and which arrives about eight seconds after the read starts (§0.2).
 - **Mitigation: push-to-talk.** `[RESEARCH]` Note 04 §9.3 documents `setMuted(isMuted)` (React) and
   `conversation.setMicMuted(true|false)` (vanilla). Hold `Space` to talk, muted otherwise. This also
   gives you the clean keyboard affordance §4.3 wants — and it makes the scripted barge-in (≈1:13 in the reworked script)
@@ -470,14 +540,15 @@ LetterLens **this is the knob to raise** (the exact enum values are flagged UNCO
 So the levers are: bigger type on the paper, more pixels on the page in frame, and a higher
 `mediaResolution` — traded against latency, which §3 then has to absorb.
 
-`[RESEARCH]` **That trade has got much worse since note 07 was written, and it changes the ranking.**
-Note 08 §3 measured a 185 KB full-page scan at **258 image tokens** and a wall-clock of **56.8 s** —
-and the same call spent 1,109 *thought* tokens to emit a 5-token answer, so latency is dominated by
-reasoning, not by pixels. Two things follow. First, image tokens are cheap, so there is no token
-argument against sending a legible frame. Second, there is no latency headroom left to spend on
-`mediaResolution`: at 57 s you are already past what the demo can absorb (§0.2). **Fix it on the
-paper and in the frame, where it is free, and leave `mediaResolution` alone until somebody has
-tested `thinkingConfig` (note 08 §8, pending) and bought the latency back.**
+`[RESEARCH]` **That trade has got much better since note 07 was written, and it changes the ranking
+again.** Note 08 §10 measured the same full-page scans at **258 image tokens** and **3.7–4.5 s** on
+the pinned `gemma-4-26b-a4b-it`, with `thinkingLevel: "minimal"` holding on the vision path — zero
+thought characters on all three calls. Two things follow. First, image tokens are cheap, so there is
+no token argument against sending a legible frame. Second, the backend bounds the call at 60 s
+rather than at `LLM_TIMEOUT_MS` (§0.1), so there is no hard gate to breach — but the end-to-end read
+is already ~8 s with a tail to 30.5 s (§0.2), and that is the budget `mediaResolution` would spend
+against. **Fix it on the paper and in the frame first, where it is free; treat `mediaResolution` as
+the next lever and measure the latency cost before relying on it.**
 
 Recommendations:
 
@@ -488,8 +559,10 @@ Recommendations:
 - **Fix the two grey tones.** Box labels at 6.3:1 and the strapline at 6.2:1 are the lowest-contrast
   ink on the page and the first to dissolve under a webcam in poor light. Make the box labels full
   `#1a1a1a`. They are the words "Date", "Time", "Pay reduced amount by" — exactly the semantics
-  `read_document` must land, and exactly the fields
-  `skills/letter-reader/references/output-schema.md` governs.
+  `read_document` must land, and exactly what feeds its `WHEN:` and `DEADLINE:` lines. (`[REPO]`
+  Note that the nine-field structured object in `skills/letter-reader/references/output-schema.md`
+  is **not what the backend returns** — it returns six plain `FROM:`/`ABOUT:`/`WHEN:`/`DEADLINE:`/
+  `REF:`/`CONTACT:` lines. The schema file is aspirational; see §0.)
 - **Print at 300 DPI, not 150.** Either regenerate at `W, H = 2480, 3508` with all sizes doubled, or
   typeset the `.txt` files in a word processor at the sizes above and print from there.
 - **Reclaim the right margin.** `[REPO]` `generate.py` wraps body text at `wrap=62` characters, so the
@@ -517,54 +590,74 @@ appear to be done already. Re-measure rather than assuming either way.)*
 Five distinct failure points with five different signatures. `docs/submission.md` Section B gives
 the one-liner to say; this is what is actually happening and what to do about it.
 
-> **⚠️ The premise of this section has changed.** It used to be safe to read "dead air" as "something
-> broke". It is not any more. Per §0.2, a **healthy** read is 20–57 seconds of silence and fails
-> outright about half the time, so **a long pause is now the normal case and not a signal.** Every
-> row below has been re-read with that in mind, and §3.1a is new: it is how you tell a slow read
-> from a dead one without guessing.
+> **⚠️ The premise of this section changed three times. Here is where it landed.** The scary figures
+> came from `gemma-4-31b-it` and are gone. But the model-call figure (3.7–4.5 s) is not the wait
+> either. Per §0.2 a **healthy end-to-end read is ~8 seconds**, with a measured tail to **30.5 s**,
+> so **ten seconds of dead air is normal and the abandon time is 35 s.** §3.1a earns its place more
+> than ever: the discriminators are how you confirm what broke without touching the laptop.
+>
+> **⚠️ And the failure *inventory* changed, which matters more.** This section was written for a
+> tunnelled webhook architecture. **There is no tunnel** (see the front matter): `read_document` is a
+> client tool, the browser calls `http://127.0.0.1:8000` directly, and ElevenLabs' cloud never
+> reaches the laptop. Failure modes 1 and 4's tunnel content is **dead**. The live failure modes on
+> the real architecture are: **camera/mic permission, CORS, the backend process being down, a 429
+> from the free tier, and a slow-but-healthy read.** The network still matters — the ElevenLabs
+> session and the Gemini API both need it — but there is no tunnel URL to go stale.
 
 ### 3.1 The failure table
 
 | # | What breaks | What the audience sees/hears | Presenter's next 5 seconds |
 |---|---|---|---|
-| 0 | **Nothing. The read is just slow.** | A long silence after the agent says "let me read that for you". **Indistinguishable from #1, #4 and #5 from the audience's seat, and often from yours.** | **Keep narrating.** This is the default assumption until your abandon time (§3.1a). Do not touch anything, do not reach for the keyboard, do not say "hmm". |
-| 1 | **Tunnel drops or restarts** (`PUBLIC_BASE_URL`) | Greeting fine, then after you hold the letter up: a silence that **never ends**, or — worse — a confident summary of a letter it never read. See 3.2. | Stop it talking. *"That's the webhook, not the model — our backend tunnel just dropped."* Go to the recording. Do not debug on stage. |
+| 0 | **Nothing. The read is just in flight.** | Up to ten seconds of silence after the agent says "let me read that for you". | **Keep narrating through your block.** A read is ~8 s and the tail reaches 30.5 s (§0.2); if you are still talking at fifteen seconds, start working the §3.1a discriminators. Do not touch anything, do not reach for the keyboard, do not say "hmm". |
+| 1 | **The backend process is down, or the browser cannot reach it** — backend not started, crashed, wrong port, or the page origin is not in `CORS_ORIGINS` | Greeting fine, then after you hold the letter up: the tool returns an error almost **instantly** — too fast to be a model call — and then either silence or, worse, a confident summary of a letter it never read. See 3.2. | **The speed is the tell: a failure inside two seconds is not the model.** Stop it talking. *"That's our local backend, not the model."* Go to the recording. Do not debug on stage. |
 | 2 | **ElevenLabs session drops mid-sentence** | The agent **cuts off mid-word**. Silence. | *"We just lost the voice session — this is live over conference wifi."* One reconnect attempt, ~5 s. Then the recording. |
-| 3 | **Vision call fails or times out** against `VISION_TIMEOUT_MS` | A long gap — up to the full 90 s — then the agent says it could not read the letter and gives one physical instruction. | Section B's line still covers this and it is still the right one. Use the **second printed copy**, flatter, closer. **One** retry, and know that the retry costs you another 20–57 s. |
-| 4 | **Congested wifi / captive-portal re-auth** | Everything *looks* connected. Nothing responds. Long pauses everywhere — **including on the conversational turns, which is the tell** (§3.1a). | *"Conference wifi. Switching to my hotspot."* Switch (pre-tested — 3.3C). If the tunnel URL changes you are now in failure #1 unless you reserved a hostname. |
+| 3 | **Vision call fails or times out** (the backend bounds it at 60 s, not at `LLM_TIMEOUT_MS` — §0.1) | A long gap, then the agent says it could not read the letter and gives one physical instruction. | Section B's line still covers this and it is still the right one. Use the **second printed copy**, flatter, closer. **One** retry — and budget another ~8 s for it. |
+| 4 | **Congested wifi / captive-portal re-auth** | Everything *looks* connected. Nothing responds. Long pauses everywhere — **including on the conversational turns, which is the tell** (§3.1a). | *"Conference wifi. Switching to my hotspot."* Switch (pre-tested — 3.3C). **Good news: the switch costs you nothing structural** — the backend is on localhost, so there is no URL to re-register. The browser's mic and camera grants also survive, because the origin never changes. |
+| 4a | **429 from the Gemini free tier** | One read fails or stalls noticeably longer than the others; the backend terminal shows the 429 and a retry. | Nothing to say — let the retry run, add ~8 s to your estimate. The free tier is 30 RPM; the backend must **honour `RetryInfo.retryDelay` as a floor** (§0.2), and one 429 advertised 17 s while real recovery took 22.8 s. If you have burned a lot of calls rehearsing, this is the likeliest single failure on the day. |
+| 4b | **Camera or microphone permission not granted** | No preview, or the session never starts; possibly a browser dialog on the projector. | *"New profile, fresh permission."* Accept it. §1.3's persistent profile and the T-10 check exist to make this impossible. |
 | 5 | **The model's scratchpad reaches the agent** (§0.3) | The agent starts speaking and does not stop — rambling, self-correcting, nothing like a letter summary. | Interrupt it. *"That's the model's scratchpad leaking through — one for the backlog."* **No retry will fix this**; the bug is in the backend. Go to the recording. |
 
-Failure #3 is still the one to relax about — the *behaviour* is good even though the wait is long:
+Failure #3 is still the one to relax about, and the *behaviour* is good:
 `skills/letter-reader/SKILL.md` has a whole **"When the image is unusable"** branch that picks one
 concrete physical instruction — closer, flatten, tilt, turn, steady — and caps retries at three
 before suggesting a trusted person. That is designed behaviour, and Section B is right that you
-should sell it rather than apologise for it. What has changed is the *arithmetic*: three retries at
-20–57 s each is up to three minutes, so the skill's retry cap is a product behaviour, not a demo
-plan. **On stage you get one retry.**
+should sell it rather than apologise for it. The *arithmetic* is the part to watch: at ~8 s end to
+end (§0.2), the skill's three-retry cap is **~24 seconds** and on the tail it is worse, so the cap is
+affordable in the product and **not** affordable on stage. **Take one retry and move on** — on a
+model that went 19/19 (§0.2), a second failure is a signal about your setup rather than bad luck, and
+no third attempt will fix it.
 
 ### 3.1a Telling a slow read from a dead one — the discriminators
 
-This is the new skill demo day demands of you. A 45-second silence is the healthy case. You need to
-know, without stopping and without touching the laptop, whether to keep talking or to cut.
+This is the skill demo day still demands of you, and it is a real one: an **eight-second** silence is
+the healthy case and the tail runs to **30.5 s** (§0.2), so the question is not "is it slow" but "is
+it alive". You need to know, without stopping and without touching the laptop, whether to keep
+talking or to cut.
 
-**Set an abandon time before you stand up. Use 75 seconds** — comfortably past the 56.8 s vision
-measurement, inside the 90 s `VISION_TIMEOUT_MS`, and short enough that you still have an audience.
-Start counting from the moment the agent says *"let me read that for you"*, not from when you raised
-the letter. **Below 75 s you narrate. At 75 s you stop and run the recovery line, regardless of what
-you believe is happening.** The value of a pre-committed number is that it removes the decision from
-the worst possible moment to be making one.
+**Set an abandon time before you stand up. Use 35 seconds** — past the 30.5 s worst case
+`backend/app.py` actually recorded, and inside the backend's own 60 s bound so you are not waiting on
+a call that has already been given up on. Earlier drafts said 75 s (that was `gemma-4-31b-it`) and
+then 15 s (that was the raw model-call figure mistaken for the wait). **15 s would abandon reads that
+were going to land.** Start counting from the moment the agent says *"let me read that for you"*, not
+from when you raised the letter. **Below 35 s you narrate. At 35 s you stop and run the recovery
+line, regardless of what you believe is happening.** The value of a pre-committed number is that it
+removes the decision from the worst possible moment to be making one.
+
+**Thirty-five seconds is a long time to fill, so plan the fill.** This is the one place the old
+"narrate over a long pause" structuring advice is still useful — not because the model is slow, but
+because the tail is real. Have two stoppable narration blocks ready, not one.
 
 What to look at while you wait, in order of how much it tells you:
 
 | Signal | Healthy slow read | Something is actually broken |
 |---|---|---|
-| **The agent's spoken "let me read that for you" at the start** | **Played.** The tool call reached the agent and the agent acted on it. | **Never played.** The agent never started the tool call — that is a session or config problem, not a slow model. Do not wait out the 75 s; you are waiting for nothing. |
+| **How fast it failed, if it failed** | n/a | **A failure inside two seconds is not the model — it is the local backend or CORS.** The model cannot answer that fast. This is the cheapest discriminator in the table and it needs no action from you at all. |
+| **The agent's spoken "let me read that for you" at the start** | **Played.** The tool call reached the agent and the agent acted on it. | **Never played.** The agent never started the tool call — that is a session or config problem, not a slow model. Do not wait out the 35 s; you are waiting for nothing. |
 | **The on-screen `Reading your letter…` state** | Up and stays up. | Never appeared, or it appeared and then cleared with no spoken result — the latter means the tool returned and something downstream ate the answer. |
-| **Ask the agent a throwaway question** — *"and while that's going, can you still hear me?"* | **It answers, fast.** The conversational path is on `gemini-2.5-flash-lite`, a different model and a different quota bucket, so it is unaffected by the slow read. **This is the single best discriminator you have**, and it is the whole payoff of the split architecture (§0.2). | **Silence.** The session or the network is gone, not the model. Stop waiting and go to recovery. |
-| **Tunnel terminal** (`Alt`+`Tab` 4, §5.1) | Shows the inbound request, no response yet. | Shows a disconnect, or no inbound request at all — the latter means the webhook never arrived. |
-| **Backend terminal** (`Alt`+`Tab` 3) | One in-flight Gemma request, waiting. | A 500/429 and a retry in progress (fine, but add 20–57 s to your estimate), or a traceback (go to recovery). |
+| **Ask the agent a throwaway question** — *"and while that's going, can you still hear me?"* | **It answers, fast — about two seconds.** The conversational path is the same `gemma-4-26b-a4b-it` and the same quota bucket as the read (§0.2), so a fast answer tells you the session and the model are both healthy and whatever is wrong is in the `read_document` path or the frame. **This is still the single best discriminator you have.** | **Silence.** The session or the network is gone, not the model. Stop waiting and go to recovery. |
+| **Backend terminal** (`Alt`+`Tab` 2, §5.1) | The inbound `POST /read_document` is logged and one Gemma request is in flight, waiting. | **No inbound request logged at all** — the process is down or on the wrong port. **An `OPTIONS` preflight logged but no `POST`** — that is CORS: the origin is not in `CORS_ORIGINS` (§1.3). Or: a 429 and a retry in progress (fine, but add ~8 s), or a traceback (go to recovery). |
 
-**Use the third row.** It is the only one that works from where you are standing, it costs five
+**Use the fourth row.** It is the only one that works from where you are standing, it costs five
 seconds, it sounds completely natural to the room, and it cleanly separates "the slow thing is slow"
 from "everything is dead". Build it into the script as a line you *may* use, so it does not sound
 improvised when you do.
@@ -572,7 +665,7 @@ improvised when you do.
 **Do not** reach for the keyboard, refresh, or peer at a terminal while the room watches. Every one
 of those reads as panic, and four times out of five you would have been interrupting a healthy read.
 
-### 3.2 Failure #1 deserves its own warning
+### 3.2 Failure #1 deserves its own warning — the agent inventing a letter it never read
 
 `[RESEARCH]` Note 03 records this verbatim from the ElevenLabs API reference:
 
@@ -589,14 +682,23 @@ and concludes:
 re-fetched every source and lists claim 14 as **CONFIRMED**, annotated "Verbatim — the build's
 biggest footgun". This is not a soft claim.
 
-For LetterLens: **if `read_document` fails, the agent is not told, and will invent a letter
+`[UNVERIFIED]` **One qualification, since the architecture changed.** Note 03 read that enum in a
+*webhook* context, and `read_document` is now a **client** tool. The enum text says `auto` hides
+errors for everything that is not a "native integration", and a client tool is not one — so the
+footgun almost certainly still applies — but nobody has confirmed the client-tool case against a
+doc page or a live session. Treat it as live until someone does.
+
+`[REPO]` **And `agent/tools/read_document.json` does not set `tool_error_handling_mode` at all**, so
+it is on `auto`. That is the one field the file is missing.
+
+For LetterLens: **if `read_document` fails, the agent may not be told, and will invent a letter
 summary** — in a demo of an assistive product for blind people, in front of judges, about a date
 someone would act on. It is the exact failure
 `skills/letter-reader/SKILL.md` spends three sections forbidding, arriving through a channel the
 skill cannot see.
 
-**`tool_error_handling_mode: "summarized"` on every webhook tool, before demo day.** It is already
-on the `docs/submission.md` Section D checklist. Tick it.
+**Set `tool_error_handling_mode: "summarized"` on `read_document` before demo day** — it is the one
+tool there is (§0). It is already on the `docs/submission.md` Section D checklist. Tick it.
 
 `[RESEARCH]` Reinforce it in the prompt too. Note 03 flags: *"What the agent literally says on
 timeout/failure: UNCONFIRMED. No doc page states a canned phrase."* `agent/persona-prompt.md`'s
@@ -608,13 +710,18 @@ receives, and it cannot follow a rule that lives only in a Markdown heading abov
 
 #### MUST be prepared before demo day — cannot be improvised
 
-**A. A reserved tunnel hostname.** `[PRACTICE]` A free ngrok quick tunnel gets a **new random
-subdomain every restart**; `cloudflared --url` gets a new random `*.trycloudflare.com` every run.
-`[RESEARCH]` Note 03 §1.4 records `api_schema.url` as a **required** field configured server-side on
-the agent, so every tunnel restart invalidates the configured webhook URL and you must re-edit it in
-the dashboard or via the API. On stage that is 2–5 minutes you do not have. Use an ngrok reserved
-domain or a named Cloudflare tunnel, point the tool at it once, never touch it again. **You cannot
-register a domain and propagate DNS in the 10 seconds after it breaks.**
+**A. ~~A reserved tunnel hostname.~~ RETIRED — there is no tunnel.** `[REPO]` `read_document` is a
+**client** tool (`agent/tools/read_document.json`, `"type": "client"`), so the browser calls
+`http://127.0.0.1:8000` itself and ElevenLabs' cloud never has to reach this laptop. There is no
+`api_schema.url` to go stale, no `PUBLIC_BASE_URL`, no `TOOL_WEBHOOK_SECRET`, and nothing to start
+before the demo except the backend and the dev server.
+
+**Say this out loud if a judge asks about reliability**, because it is a genuine engineering win and
+not just an absence of work: a tunnel is a dependency that dies quietly in the middle of a demo and
+takes 2–5 minutes to re-register. Making the tool client-side deleted that failure mode outright
+rather than mitigating it. The analysis this item used to contain (random subdomains per restart,
+`api_schema.url` required server-side) was correct for a webhook architecture and is kept in the
+research notes; it no longer applies here.
 
 **B. A pre-recorded screen capture of a successful end-to-end run.** `[PRACTICE]` With audio, shot on
 this laptop at the projector's resolution, **stored as a local file** (not YouTube — you will have no
@@ -624,72 +731,86 @@ something to show. `docs/submission.md` Section D already wants a demo video for
 — **record it so it doubles as this.** You cannot record a successful run during a failed demo.
 
 **C. A phone hotspot, tested end-to-end.** `[PRACTICE]` Not "I have a hotspot" — SSID saved, laptop
-joined at least once, data allowance confirmed, and **the full chain exercised over it**: tunnel up,
-agent connects, `read_document` round-trips. First-time joining on stage costs 60–90 seconds and
-usually restarts your tunnel, dropping you into failure #1.
+joined at least once, data allowance confirmed, and **the full chain exercised over it**: backend up,
+agent connects, `read_document` round-trips. First-time joining on stage costs 60–90 seconds.
+**The switch itself is now cheap**: the backend is on localhost and the page origin never changes, so
+there is no URL to re-register and the browser's mic and camera grants survive the network change
+intact. Only the ElevenLabs session and the Gemini API care that the network moved.
 
-**D. The model pin, verified with a real 200 *through the backend*.** See §0.1. The pin itself is
-fixed and the model is proven at the API level; what is not proven is the application path to it.
-No network mitigation saves you from a `read_document` handler that has never returned a letter.
+**D. ✅ The model pin, verified with a real 200 *through the backend*. DONE.** See §0.1. `POST
+/read_document` returned 200 on the first attempt for all three letters in **8.1 s, 7.6 s and
+8.7 s**, verbatim-correct. Re-run it at T-60 on the venue network anyway — that is where the number
+changes.
 
-**D2. The split model paths, actually implemented.** §0.2. This is a mitigation, not just an
-architecture note: if conversational turns still go to Gemma on the day, **every single turn costs
-20–57 s**, the agent cannot answer the throwaway question that §3.1a depends on, and you lose both
-the demo and your ability to diagnose it. `CHAT_MODEL=gemini-2.5-flash-lite` and
-`VISION_TIMEOUT_MS=90000` are staged commented-out in `.env.example`; they do nothing until the
-backend reads them.
+**D2. ~~The split model paths, actually implemented.~~ RETIRED — do not build it.** §0.2. Note 08 §10
+settled one model for both paths: 2.0 s median on text, 3.7–4.5 s on vision. `CHAT_MODEL` and
+`VISION_TIMEOUT_MS` stay commented out in `.env.example`. The diagnostic this item used to
+underwrite — asking the agent a throwaway question mid-read — still works; see §3.1a for what it now
+tells you.
 
-**D3. `thought: true` filtering in the backend.** §0.3. Three lines of Python standing between you
-and the agent reading four thousand characters of model deliberation aloud to the room.
+**D3. ✅ `thought: true` filtering in the backend. DONE.** §0.3. `[REPO]` `backend/app.py`'s
+`_extract_text()` joins only the parts without a `thought` flag, and the vision call runs at
+`thinkingLevel: "minimal"` as a first layer. This was three lines of Python standing between you and
+the agent reading four thousand characters of model deliberation aloud to the room, and they are
+written. Still confirm at T-60 that the spoken result is short — a regression here is silent until
+it is on a PA.
 
 #### Cheap, and still before demo day
 
-**E. `tool_error_handling_mode: "summarized"`.** §3.2. Minutes of work. Prevents the worst outcome.
+**E. `tool_error_handling_mode: "summarized"` on `read_document`.** §3.2. Minutes of work. Prevents
+the worst outcome. `[REPO]` **Not set in `agent/tools/read_document.json` yet** — it is the only
+field missing from that file.
 
 **F. Cover the latency with speech.** `[RESEARCH]` Note 03 §1.3, verbatim: `pre_tool_speech` —
 "'auto' (default) decides based on recent tool latency, **'force' always asks the agent to speak**,
-'off' fully opts out". Set `"force"` on `read_document`. `[RESEARCH]` Also available:
+'off' fully opts out". ✅ `[REPO]` **Already set to `"force"` on `read_document`**, along with
+`tool_call_sound_behavior: "always"` and `interruption_mode: "allow"`. `[RESEARCH]` Also available:
 `tool_call_sound` (`typing`, `elevator1`–`4`), and note 04 §7.2's
 `conversation_config.turn.soft_timeout_config` with a `message` field — "Message to show when the
 first soft timeout is reached while waiting for LLM response." Section B's script hangs its entire
 timing on the agent saying *"let me read that for you, one moment"* at ≈0:14; `pre_tool_speech:
 "force"` is what makes that line actually happen.
 
-**This has gone from a polish item to a load-bearing one.** The pause it covers is no longer the
-twelve seconds the original script assumed — it is **20–57 seconds** (§0.2). Without that spoken
-line you are standing in up to a minute of unexplained silence with nothing to point at, and
-§3.1a's first and best discriminator ("did the line play?") does not exist. It is also an
-**accessibility** requirement (§4.5): silence tells a blind user nothing, and forty-five seconds of
-it tells them the product is broken. `soft_timeout_config.message` is worth setting as a second
-layer for the same reason — a 45-second wait justifies a second reassurance partway through, not
-just one at the start.
+**It is a polish item with an accessibility floor under it, and at ~8 s it is more than polish.** The
+pause it covers is **~8 seconds** end to end (§0.2), with a tail to 30.5 s — not the twenty to sixty
+we briefly budgeted for on `gemma-4-31b-it`, but not four seconds either. Eight seconds of silence
+tells a sighted user "it's thinking" and a blind user nothing, and §3.1a's "did the line play?"
+discriminator only exists if the line plays. `soft_timeout_config.message` is **worth configuring**
+after all: an eight-second wait with a thirty-second tail is exactly the case a mid-wait reassurance
+is for.
 
-**G. Get the two timeouts and the frame payload right.** This one has changed substantially.
+**G. Get the timeouts and the frame payload right.** This one has changed substantially, three times.
 
-`[REPO]` `.env.example` sets `LLM_TIMEOUT_MS=8000`, and under the split-path architecture (§0.2)
-**that value is now the *chat* budget only** — correct for a conversational turn on
-`gemini-2.5-flash-lite`, and still correctly sitting inside the webhook timeout so the backend fails
-first and you control the failure message. `[RESEARCH]` Note 03 §7.1 gives the webhook
-`response_timeout_secs` default as **20 s** (range 5–300), re-confirmed in the verification pass as
-claim 13.
+`[REPO]` `.env.example` still sets `LLM_TIMEOUT_MS=8000`, **and `backend/app.py` never reads it.
+That is correct, not an oversight** — a healthy end-to-end read is 8.1–8.7 s, so an 8-second gate
+would kill good reads. The vision call is bounded by the backend's own
+`httpx.Timeout(60.0, connect=10.0)`. **Do not wire `LLM_TIMEOUT_MS` into the vision path.** Note that
+`backend/app.py`'s comments also record a 30.5 s call outliving a nominal 25 s bound, which is why
+the 60 s figure is what it is.
 
-**But the 20 s webhook default is now shorter than a *healthy* `read_document` call.** Measured
-Gemma latency is 19.9–56.8 s (§0.2), so left at the default the platform times the tool out before
-the model has answered, on every single read. The ordering that has to hold is:
+`[REPO]` **The tool-side timeout is `response_timeout_secs: 120` in
+`agent/tools/read_document.json`, not the 20 s default.** Earlier drafts of this file argued for the
+20 s default on the strength of a 3.7–4.5 s model call; that was the wrong comparison. Against a
+measured ~8 s read with a 30.5 s tail and a 60 s backend bound, the ordering that has to hold is:
 
 ```
-VISION_TIMEOUT_MS (90 s)  <  read_document response_timeout_secs (≥120 s)
-LLM_TIMEOUT_MS    (8 s)   <  every other tool's response_timeout_secs (20 s default, fine)
+backend httpx timeout (60 s)  <  read_document response_timeout_secs (120 s)
 ```
 
-**Raise `response_timeout_secs` to ≥120 on the `read_document` webhook tool only.** Leave the others
-alone. `docs/submission.md` Section D carries the same line.
+so the backend fails first and you control the failure message. **Leave `response_timeout_secs` at
+120.** `[RESEARCH]` Note 03 §7.1 gives the default as 20 s (range 5–300), re-confirmed in the
+verification pass as claim 13 — 120 is inside that range. The ≥120 s figure in the *earliest* drafts
+came from `gemma-4-31b-it`'s 36.8–56.8 s vision calls and was arrived at for the wrong reason; it
+happens to be the right value for the right reason now. Check what `docs/submission.md` Section D
+says and make the two agree.
 
-`[CALC]` **Payload size still matters, but it is no longer the big number.** On a saturated
-conference uplink of ~2 Mbps a 1.5 MB full-resolution frame takes **~6 seconds to upload before the
-model sees anything**, and `[RESEARCH]` note 07 §2.4 notes base64 inflates bytes by ~4/3 on top of
-that. Against a 20–57 s model call those 6 seconds are now 10–30 % of the wait rather than most of
-it — still worth removing, no longer the thing to optimise first. Downscale and JPEG-compress
+`[CALC]` + `[REPO]` **Payload size is a measured term, not a projection, and it is the gap between
+3.7–4.5 s and 8 s.** The PNGs in `test-letters/` are ~0.5 MB at 300 DPI; base64 inflates that by ~4/3
+(`[RESEARCH]` note 07 §2.4), and encoding plus upload is what accounts for roughly half of the
+measured end-to-end time even on a good local network. On a saturated conference uplink of ~2 Mbps a
+1.5 MB frame would add **~6 seconds** on top. **Client-side downscaling is the single biggest latency
+win left on the read path**, and it is the one that would move the ~8 s figure. Downscale and
+JPEG-compress
 client-side: long edge ~1280 px, quality ~80, **target ≤ 250 KB**, keep it in colour (letterhead
 colour is real signal). `[RESEARCH]` Note 08 §3 confirms `inline_data` base64 works in a single
 round trip, so there is no Files API hop to budget for. Balance this against the `mediaResolution`
@@ -698,16 +819,17 @@ fix it on the paper instead.
 
 **H. Validate the chain at T-10 — but do not expect it to make the model faster.** `[PRACTICE]` At
 T-10, on the venue network, with the actual printed letter, run one complete `read_document` round
-trip. It validates the whole chain — tunnel, agent config, webhook secret, vision call, thought-part
-filtering, audio out — at the last possible moment, and it gives you one real latency sample for
-tonight's network.
+trip. It validates the whole chain — camera permission, the browser reaching `127.0.0.1:8000`, CORS,
+the signed-url mint, agent config, the vision call, thought-part filtering, audio out — at the last
+possible moment, and it gives you one real latency sample for tonight's network.
 
-`[RESEARCH]` **It will not warm anything.** The latency is generation-bound, not cold-start: note 08
-§1.2 attributes the 56.8 s vision call to the 1,109 thought tokens it emitted for a 5-token answer.
-The second call costs what the first one cost. Do the warm run for validation, and do **two** of
-them if you have time — at a ~50 % failure rate a single success tells you much less than you think
-it does, and a single failure tells you almost nothing (note 08 §6: *"never conclude a capability is
-unsupported from 5xx alone"*).
+`[RESEARCH]` **It will not warm anything.** Note 08 §1.2 raised the "latency is thinking tokens"
+hypothesis and then killed it — a `thinkingLevel: "minimal"` probe with zero thought characters still
+took 36.2 s on `gemma-4-31b-it`, so the model was the whole variable. **But do two runs, not one**,
+because the thing you are sampling has a tail (5.1, 5.5, 8.2, 14.4, 30.5 s — §0.2) and one sample
+tells you nothing about it. The constraint on doing more is the free tier's 30 RPM and a 429 being
+the likeliest single failure (note 08 §6: *"never conclude a capability is unsupported from 5xx
+alone"*).
 
 **I. A canned/mock path.** `[RESEARCH]` Two documented routes:
 - **Client-side**, note 04 §3: a session option
@@ -721,13 +843,13 @@ unsupported from 5xx alone"*).
 remove the ElevenLabs session, which still needs the network. It covers "the vision call is slow or
 down". It does not cover "the wifi is dead". For that, only B works.
 
-**It has, however, been promoted.** With a 20–57 s read at a ~50 % failure rate (§0.2), the mock is
-no longer only a break-glass option — `docs/submission.md` Section B lists it as **option C**, a
-legitimate way to fit a short slot, and it is the *only* way the 30-second cut-down can exist at
-all. **The condition is disclosure:** one spoken sentence — *"the vision call is stubbed here so I
-fit the slot; come to the table and I'll run it live"* — and it is completely fine. Undisclosed, in
-a public repo, in front of judges, it is not. Build the flag, and build the sentence into the card
-next to it.
+**It has, however, been demoted.** At ~8 s and 19/19 with no 5xx (§0.2), the mock is a break-glass
+option for a dead network rather than a timing strategy — `docs/submission.md` Section B no longer
+needs option C, and a 90-second script can be run live. ~~The 30-second cut-down~~ is the one case
+where it would still earn its place: ~8 s of a 30-second slot is a quarter of the slot. **The
+condition is disclosure:** one spoken sentence — *"the vision call is stubbed here so I fit the slot;
+come to the table and I'll run it live"* — and it is completely fine. Undisclosed, in a public repo,
+in front of judges, it is not. If you build the flag, build the sentence into the card next to it.
 
 **J. There is no cheap true-offline LetterLens.** The voice agent is a hosted service. Do not spend
 demo week building local TTS; spend twenty minutes recording B.
@@ -744,16 +866,28 @@ demo week building local TTS; spend twenty minutes recording B.
 - **Captive-portal re-auth.** Many venue networks silently drop you after an hour. If everything
   stops at once with no error, re-open the portal page before touching anything else.
 
-### 3.4 An architecture decision that already protects you
+### 3.4 Two architecture decisions that already protect you
 
-`[REPO]` `.env.example` sets `CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173` — the
-**frontend is served from localhost and only the backend goes through the tunnel**. Keep it that way.
+**1. Everything is localhost.** `[REPO]` `.env.example` sets
+`CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173`, the frontend is served from localhost,
+and the backend is reached at `http://127.0.0.1:8000` **by the browser, not by ElevenLabs' cloud**.
+Nothing is tunnelled and nothing is deployed. Keep it that way.
 `[RESEARCH]` Note 04 §9.2 records that `navigator.mediaDevices` needs a secure context — HTTPS or a
 localhost-family origin — so `http://localhost:5173` is fine where a LAN IP would not be. More
-importantly for §3: **browser permissions are per-origin.** Served through the tunnel, every tunnel
-restart would be a new origin and you would lose the granted microphone permission, producing a
-permission dialog live on stage on top of everything else. Serving the UI from localhost makes the
-mic grant survive every network event.
+importantly for §3: **browser permissions are per-origin, and this origin never changes.** A
+tunnelled UI would get a new origin on every tunnel restart and lose the granted microphone
+permission, producing a permission dialog live on stage on top of whatever else was going wrong.
+Localhost makes the mic and camera grants survive every network event, including a hotspot switch.
+
+**The cost of this is one new failure mode, and it is the one to check at T-60:** the page origin
+must be in `CORS_ORIGINS`. `vite preview` serves on **4173**, not 5173 (§1.3), so presenting from a
+preview build with the stock `CORS_ORIGINS` is a silent CORS failure that looks exactly like a dead
+backend. The §3.1a discriminator for it is an `OPTIONS` in the backend log with no `POST` after it.
+
+**2. `ELEVENLABS_API_KEY` never reaches the browser.** `[REPO]` `GET /signed-url` mints a
+short-lived ElevenLabs conversation token server-side and the frontend fetches that instead of
+holding a key. Verified live: HTTP 200 in 1.4 s with a real token. This is the one thing that still
+*has* to be server-side, and it is the reason the backend exists at all beyond the vision call.
 
 ---
 
@@ -779,7 +913,8 @@ stream, so they cannot be made to stay in sync.
    *implicit* `aria-live="polite"` — using it is the same mistake wearing a hat. Use a labelled
    region (`<section aria-label="Conversation transcript">`) with no live semantics.
 2. **Reserve `aria-live="polite"` strictly for state the agent does not say aloud:** "Camera ready",
-   "Reading your letter…", "Microphone muted", "Connection lost", "Calendar file downloaded".
+   "Reading your letter…", "Microphone muted", "Connection lost". (The fourth example this list used
+   to give, "Calendar file downloaded", is gone: `add_event` is **NOT BUILT** — see §0.)
 3. **Offer it as a user setting, defaulting off.** A deaf-blind judge on a braille display gets
    *nothing* from the TTS — braille is driven by the screen reader, so for them the live region is
    the only channel. One toggle, off by default, is the correct answer.
@@ -807,7 +942,7 @@ screen reader mid-sentence. Reserve it for errors, and prefer polite even there.
 | `[RESEARCH]` Call `navigator.mediaDevices.getUserMedia({ audio: true })` yourself, from that gesture, **before** `startSession` | Note 04 §9.1, verbatim from the ElevenLabs docs: "Consider explaining and allowing microphone access in your app's UI before starting the conversation." §3.4 gives the reason it matters in React: `startSession` **does not reject** on failure, so without the pre-flight "denied mic" and "connection failed" are indistinguishable. |
 | **Visible focus indicator, ≥3 px / 0.4 vh, ≥3:1 against both the component and its background** | WCAG 1.4.11, 2.4.7 (2.2 adds 2.4.11 Focus Not Obscured and 2.4.13 Focus Appearance). A 1 px default outline is invisible on a projector — this is a legibility requirement too. Do not `outline: none`. |
 | **Do not steal focus mid-utterance.** Give a new result card `tabindex="-1"` and move focus only on explicit user action, or announce "Result ready — press R" | Moving focus interrupts the screen reader and loses the user's place. WCAG 2.4.3, 3.2.1. |
-| After the `.ics` download from `add_event`, announce the filename and location | A browser download is a focus and announcement black hole. Put it in the polite live region — the agent does not say it, so no conflict. |
+| ~~After the `.ics` download from `add_event`, announce the filename and location~~ **NOT BUILT — no requirement to meet.** `add_event` and the `.ics` download do not exist (§0). Keep the reasoning for whenever a download does ship: a browser download is a focus and announcement black hole, so it belongs in the polite live region, where the agent does not speak and there is no conflict. | — |
 
 ### 4.4 Captions
 
@@ -839,7 +974,7 @@ a feature". `docs/submission.md` Section D already has the equivalent line for `
 | Text resizes to 200% without loss; reflows at 320 CSS px | WCAG 1.4.4 / 1.4.10. Directly relevant because you may hit `Ctrl` `+` on stage. |
 | No information available only on hover | WCAG 1.4.13 — and nobody can see your hover on a projector. |
 | **`[RESEARCH]` Set `turn_eagerness: "patient"` and a generous `turn_timeout`** | Note 04 §7.2: `turn_timeout` is seconds, range 1–30, and the docs warn shorter timeouts "may interrupt users who need more time to respond". A low-vision user fumbling a sheet of paper **is** slow. An assistive product that talks over a hesitant user fails its own brief. |
-| **The agent must narrate its own waiting — and the wait is 20–57 seconds** | §0.2. Several seconds of silence tells a sighted user "it's thinking" and a blind user nothing; **forty-five seconds of it tells a blind user the product is broken**, and they have no screen to check. `pre_tool_speech: "force"` (§3.3F) fixes the accessibility problem and the latency problem with one config change. For a wait this long, also set `soft_timeout_config.message` so there is a second reassurance partway through, and make sure the on-screen `Reading your letter…` state is in the polite live region (§4.1) — it is state the agent does not speak, so there is no double-speak conflict. |
+| **The agent must narrate its own waiting — the wait is ~8 seconds, with a tail to 30.5 s** | §0.2. Eight seconds of silence tells a sighted user "it's thinking" and a blind user nothing, and they have no screen to check. ✅ `pre_tool_speech: "force"` is already set on `read_document` (§3.3F). At this length `soft_timeout_config.message` **is** worth adding as a mid-wait reassurance. Keep the on-screen `Reading your letter…` state in the polite live region (§4.1) — it is state the agent does not speak, so there is no double-speak conflict. |
 | **Never let the agent speak the model's reasoning** | §0.3. If `thought: true` parts are not filtered, the agent reads 4,236 characters of deliberation aloud. For a sighted user that is embarrassing; for a blind user it is actively harmful — there is no visual cue that what they are hearing is not their letter, and the spoken content contains plausible-sounding wrong answers the model is in the middle of discarding. This is the single worst accessibility failure the build can ship. |
 
 ### 4.6 What to actually test, and how
@@ -863,31 +998,50 @@ checklist. This one is timed and goes wider.
 
 ### T-60 minutes — at the venue, on the venue network
 
-- [ ] **Confirm the model pin is `gemma-4-31b-it` in both `.env.example` and `.env.local`, and get
-      one real 200 back *through the backend* with a letter image.** (§0.1 — nothing else in this
-      list matters if this is wrong. Note the ID: `gemma-4-26b-a4b-it` was the old recommendation
-      and is superseded; vision is verified on 31b.)
+**Start the two processes first; everything else checks them.**
+
+- [ ] **Backend up:** `python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000`. Leave the
+      terminal visible — it is a §3.1a discriminator.
+- [ ] **`GET /health` reports both keys loaded.** `curl http://127.0.0.1:8000/health` and read it:
+      `gemini_key` and `elevenlabs_key` must both be `true`, and `vision_model` must say
+      `gemma-4-26b-a4b-it`. **There is no tunnel to curl through** — localhost is the real path the
+      browser takes (§3.4).
+- [ ] **Frontend up:** `npm run dev` in `frontend/`.
+- [ ] **Confirm the page origin is in the backend's `CORS_ORIGINS`.** `npm run dev` serves 5173,
+      which the stock value covers; `vite preview` serves **4173**, which it does not (§1.3, §3.4).
+      A mismatch is a silent CORS failure that looks exactly like a dead backend.
+- [ ] **Confirm the model pin is `gemma-4-26b-a4b-it` in both `.env.example` and `.env.local`, and
+      get one real 200 back *through the backend* with a letter image.** (§0.1 — nothing else in this
+      list matters if this is wrong. Note the ID: `gemma-4-31b-it` was the interim pin and is
+      superseded; the pinned 26b read all three letters end to end in **8.1 s, 7.6 s, 8.7 s**.)
 - [ ] **Confirm the answer came back clean — not the model's scratchpad.** (§0.3. If the spoken
-      result is long and rambling, `thought: true` filtering is missing and no retry fixes it.)
-- [ ] **Confirm a conversational turn comes back fast** — ask the agent anything and time it. If it
-      takes 20 s+, the chat path is still on Gemma, you have no split (§0.2), and §3.1a's best
-      diagnostic does not work.
-- [ ] **Confirm `read_document`'s webhook `response_timeout_secs` is ≥120**, not the 20 s default.
-      (§3.3G — the default is shorter than a healthy read.)
+      result is long and rambling, `thought: true` filtering has regressed and no retry fixes it.)
+- [ ] **Confirm the returned text is the six-line shape** — `FROM:` / `ABOUT:` / `WHEN:` /
+      `DEADLINE:` / `REF:` / `CONTACT:` (§0). Anything else and the agent is summarising something
+      other than what you think.
+- [ ] **Confirm a conversational turn comes back fast** — ask the agent anything and time it. Expect
+      ~2 s on `gemma-4-26b-a4b-it` (§0.2). If it takes 20 s+, check the pin: a turn that slow is the
+      signature of `gemma-4-31b-it`, not of a healthy build.
+- [ ] **Confirm `read_document`'s `response_timeout_secs` is 120** in
+      `agent/tools/read_document.json`, so the backend's own 60 s bound fires first and you control
+      the failure message. (§3.3G. **Do not "fix" `LLM_TIMEOUT_MS=8000` into the vision path** — a
+      healthy read exceeds it.)
 - [ ] Laptop on mains. Hotspot phone charged, hotspot **on and joined once**.
 - [ ] Join venue wifi, **5 GHz**. Clear any captive portal.
-- [ ] Backend up. Tunnel up **on the reserved hostname**. `PUBLIC_BASE_URL` matches the URL
-      configured on the ElevenLabs webhook tools.
-- [ ] `curl` the backend health endpoint **through the tunnel**, not locally.
-- [ ] **Two** full end-to-end runs with the real printed letter — not one. At a ~50 % failure rate
-      (§0.2) a single result tells you very little. Check `latency-*.jsonl` and write tonight's
-      actual numbers on your card; they are what you rehearse the narration against.
-      - **20–60 s is normal.** Do not switch networks over it — the latency is the model, not the
-        venue (§3.3H), and the hotspot will not be faster.
+- [ ] **Two** full end-to-end runs with the real printed letter — not one. One result is one
+      sample, and the figure you care about is end-to-end rather than note 08's model-call time.
+      Check `latency-*.jsonl` and write tonight's actual numbers on your card; they are what you
+      rehearse the narration against.
+      - **~8 s is normal, and 14–30 s is within the measured tail** (5.1, 5.5, 8.2, 14.4, 30.5 s —
+        §0.2). If a read takes 40 s+ or fails, suspect the pin first (`gemma-4-31b-it` looks exactly
+        like this) and the frame upload second.
       - **Switch to the hotspot if the *conversational* turns are slow**, or if the frame upload
-        itself is slow. Those are network. The read is not.
-      - If **both** runs fail outright, that is a ~25 % event on a healthy setup and a ~100 % event
-        on a broken one — do a third before concluding anything, and re-read §3.1a.
+        itself is slow. Those are network — and since encoding plus upload is roughly half of the
+        measured ~8 s (§3.3G), the network is a large share of the read.
+      - If **both** runs fail outright, that is close to conclusive: the pinned model went 19/19
+        across note 08 §§6.1 and 10 and 3/3 end to end through the backend, so two failures is a
+        broken setup, not bad luck. Check the pin, `GET /health`, and `CORS_ORIGINS` against the page
+        origin before you blame the model, and re-read §3.1a.
 - [ ] If the session will not connect, test `webRtc.iceTransportPolicy: "relay"` (§3.3).
 - [ ] Walk to the **back of the room** and look at the projected screen. If you cannot read the
       caption line, fix it now with `Ctrl` `+`.
@@ -899,11 +1053,18 @@ checklist. This one is timed and goes wider.
 - [ ] Windows checklist §1.4, items 1–16. **Especially #15, the audio output device.**
 - [ ] Plug in the projector. Confirm the resolution Windows chose. Re-check the viewport.
 - [ ] Launch Chrome: `--app=http://localhost:5173 --start-fullscreen --user-data-dir="C:\demo-profile"`.
-- [ ] Confirm mic and camera permissions are already granted — no dialog appears.
-- [ ] Headset mic on. Say one sentence; confirm it comes out of the room PA, not the laptop.
-- [ ] **Validation run:** one complete `read_document` with the printed letter (§3.3H). It confirms
-      the chain; it does **not** make the next call faster.
-- [ ] Fallback recording open in VLC, paused at frame 0. Pre-generated `.ics` open in a second tab.
+- [ ] **Grant camera and microphone permission now, before you stand up** — and confirm no dialog
+      appears when you start the session. `[REPO]` The camera matters as much as the mic here:
+      `read_document` takes no parameters and reads whatever the camera sees *now* (§0), so a
+      camera the browser has not been granted is a dead demo, not a degraded one. §1.3's persistent
+      `C:\demo-profile` is what makes this stick.
+- [ ] **Confirm laptop volume is up and the external speaker is live** if the room is bigger than 20
+      people (§1.5). Then: headset mic on, say one sentence, confirm it comes out of the room PA and
+      not the laptop.
+- [ ] **Validation run:** one complete `read_document` with the printed letter (§3.3H) — two if the
+      quota allows, because the thing you are sampling has a tail. It confirms the chain; it does
+      **not** make the next call faster.
+- [ ] Fallback recording open in VLC, paused at frame 0.
 - [ ] Park the mouse in a corner. Do not touch it again.
 
 ### T-1 minute
@@ -911,11 +1072,15 @@ checklist. This one is timed and goes wider.
 - [ ] Both printed copies of letter 01 stacked, face up, on stiff card, within arm's reach.
 - [ ] Connection status reads **Connected**.
 - [ ] Do not disturb **on**. Phone silent — it is your hotspot, so silent, not off.
-- [ ] Section B script card in hand — **the reworked one**, with the hook moved to *during* the read
-      and only your chosen option (A, B or C) on it.
-- [ ] **Your abandon time written on the card: 75 seconds** from the agent's "let me read that for
-      you" (§3.1a). And the throwaway-question line — *"and while that's going, can you still hear
-      me?"* — written next to it, so you do not have to invent it under pressure.
+- [ ] Section B script card in hand — **the reworked one**, with the hook moved to *during* the read.
+      There is no longer an A/B/C choice: the 90-second script runs live, read included (§0.2).
+- [ ] **Your abandon time written on the card: 35 seconds** from the agent's "let me read that for
+      you" (§3.1a — a healthy read is ~8 s, the measured tail reaches 30.5 s, and the backend gives
+      up at 60 s). **Not 15 s** — that would abandon reads that were going to land. And the
+      throwaway-question line — *"and while that's going, can you still hear me?"* — written next to
+      it, so you do not have to invent it under pressure.
+- [ ] **Two stoppable narration blocks ready, not one.** Thirty-five seconds is a long time to fill
+      and the tail is real (§3.1a).
 
 ### 5.1 What to have open, in what order
 
@@ -923,9 +1088,10 @@ checklist. This one is timed and goes wider.
 |---|---|---|
 | Foreground | Chrome, `--app` fullscreen, `http://localhost:5173` | The demo. Nothing else in this window. |
 | `Alt`+`Tab` 1 | VLC with the fallback recording | Paused at frame 0, fullscreen-ready |
-| `Alt`+`Tab` 2 | Second tab with the pre-generated `.ics` | Per Section B's calendar-card fallback |
-| `Alt`+`Tab` 3 | Terminal: backend | Visible logs |
-| `Alt`+`Tab` 4 | Terminal: tunnel | Visible, so you can see it drop |
+| `Alt`+`Tab` 2 | Terminal: **backend** (`uvicorn`) | Visible logs — the §3.1a discriminator. You are looking for the inbound `POST /read_document`. |
+| `Alt`+`Tab` 3 | Terminal: **frontend** (`npm run dev`) | Visible, so you can see it if it dies |
+| ~~Second tab with the pre-generated `.ics`~~ | **NOT BUILT** — `add_event` does not exist (§0). Nothing to pre-generate and nothing to fall back to. | — |
+| ~~Terminal: tunnel~~ | **There is no tunnel** (§3.4). Nothing to watch. | — |
 | Not open | Everything else | Slack, Teams, Discord, Outlook, Steam, OneDrive: **quit** |
 
 ### 5.2 What to have printed, in what order
@@ -951,17 +1117,19 @@ Section B has the per-segment lines. These are the cross-cutting ones it does no
 
 | X | Say Y | Then do |
 |---|---|---|
-| **Long silence after "let me read that for you"** | *(say nothing about it — keep narrating)* | **This is normal.** 20–57 s is the healthy range (§0.2). Work through your narration blocks. Use the throwaway question (§3.1a) if you need to check without stopping. **Cut at 75 s, not before.** |
-| **75 seconds and still nothing** | *"That one's not coming back — it fails about half the time on the free tier, which is exactly why the conversation doesn't depend on it."* | Second printed copy, flatter, closer. **One** retry — and know it costs another 20–57 s, so if you are already past time, go straight to the recording instead. |
+| **Long silence after "let me read that for you"** | *(say nothing about it — keep narrating)* | **~8 s is the healthy read and the tail runs to 30.5 s (§0.2), so ten seconds of silence is normal.** Finish your narration block, start the second one, use the throwaway question (§3.1a) to check without stopping. **Cut at 35 s, not earlier and not later.** |
+| **The read failed almost instantly** — a second or two, far too fast to be a model call | *"That's our local backend, not the model — one second."* | **Speed is the diagnosis** (§3.1a row 1): the process is down, on the wrong port, or the origin is not in `CORS_ORIGINS`. You will not fix any of those on stage. Go to the recording. |
+| **35 seconds and still nothing** | *"That's past where a read lands — about eight seconds, measured, with a tail. Something upstream has gone. Let me give it a cleaner shot."* | Second printed copy, flatter, closer. **One** retry — budget another ~8 s for it, so only take it if you have the time left. |
 | **You run out of things to say before the read lands** | *"I'll let that keep working while I tell you where this goes next —"* | Pivot to the "What's next" material (multi-page letters, a phone number, returning-sender memory). Have ~30 seconds of it ready. This is why Section B gives you three stoppable narration blocks. |
 | **Agent reads a long rambling monologue** about what it is thinking | *"That's the model's scratchpad leaking through — one for the backlog."* | Interrupt it immediately; barge-in is right there. **No retry fixes this** — it is unfiltered `thought: true` parts (§0.3), a backend bug. Go to the recording. |
 | Agent is **confidently wrong** about the letter | *"That's the failure we care most about — the read failed and the agent wasn't told. Let me show you what it does wired correctly."* | Switch to the recording. Naming the §3.2 footgun honestly reads far better than looking confused — and it is the exact thing the skill file exists to prevent. |
-| **Conversational turns are also slow** (the agent takes 20 s+ to answer anything, not just to read) | *"Conference wifi — give me one second."* | The chat path is not split, or the network is gone (§3.1a). Either way the demo is over as a live demo: go to the recording. Do not wait it out. |
+| **Conversational turns are also slow** (the agent takes 20 s+ to answer anything, not just to read) | *"Conference wifi — give me one second."* | The pin has reverted to `gemma-4-31b-it`, or the network is gone (§3.1a). Either way the demo is over as a live demo: go to the recording. Do not wait it out. |
 | Agent cuts off mid-word, then silence | *"Lost the voice session — live over conference wifi."* | One reconnect, ~5 s. Then the recording. |
 | Agent keeps cutting itself off | *(don't flag it)* | Audio feedback (§1.5). Drop the PA volume or go push-to-talk. |
-| Nothing responds, everything looks fine | *"Conference wifi. Switching to my hotspot."* | Switch. The reserved hostname means the tool URL survives. |
+| Nothing responds, everything looks fine | *"Conference wifi. Switching to my hotspot."* | Switch. **The switch is structurally free** (§3.4): the backend is on localhost, so there is no URL to re-register, and the page origin never changes, so the mic and camera grants survive. |
 | No sound at all | *"One second — audio output."* | Settings → Sound → output device. It switched to the projector on HDMI (§1.4 #15). |
-| Mic permission dialog appears on stage | *"New origin, fresh permission."* | Accept. §1.3's persistent profile prevents it. |
+| Mic **or camera** permission dialog appears on stage | *"Fresh profile, fresh permission."* | Accept. §1.3's persistent profile and the T-10 grant prevent it. The camera is the one that ends the demo if denied — `read_document` has no parameters and reads whatever the camera sees now (§0). |
+| **A judge asks about an `.ics` file, a calendar entry, a reminder or a drafted reply** | *"Not built — `read_document` is the one tool that exists today. The scaffolding for the others is designed, not wired."* | **Do not improvise a demo of them** (§0). Say what is built, which is a correct and verbatim read on 3/3 letters, and move on. |
 | Screen dims or a notification pops | Keep talking, do not apologise | Dismiss. §1.4 items 8, 10–12 prevent it. |
 | Text too small from the back | *(say nothing)* | `Ctrl` `+` twice. Works only if you sized in `rem`, not `vh` (§1.1). |
 
@@ -975,47 +1143,78 @@ second opinion.
 
 **Backend — not config, and not optional. These four are ahead of everything below:**
 
-0a. ⟳ **Filter `thought: true` parts.** Three lines. Without them the agent reads 4,236 characters of
-   model deliberation aloud to a blind user. (§0.3)
-0b. ⟳ **Implement the split model paths** — `CHAT_MODEL=gemini-2.5-flash-lite` for conversation,
-   `gemma-4-31b-it` + `VISION_TIMEOUT_MS=90000` for `read_document`. Staged commented-out in
-   `.env.example` and inert until the backend reads them. (§0.2)
-0c. ⟳ **Strip markdown fences before parsing, and validate server-side.** `responseSchema` returns
-   200 and is silently ignored. (§0.4)
-0d. ⟳ **Serial requests, mandatory retries, honour `RetryInfo.retryDelay` as a floor.** (§0.2)
+0a. ✅ **DONE — Filter `thought: true` parts.** `backend/app.py`'s `_extract_text()` does this, and
+   the vision call runs `thinkingLevel: "minimal"` as a first layer. (§0.3)
+0b. ✅ **Do NOT implement the split model paths.** Note 08 §10 retired them: `gemma-4-26b-a4b-it`
+   serves conversation (2.0 s median, 8/8) and vision (3.7–4.5 s raw model call, 3/3).
+   `CHAT_MODEL` and `VISION_TIMEOUT_MS` stay commented out in `.env.example`. (§0.2)
+0c. ✅ **MOOT — do not strip markdown fences, there is no JSON to parse.** `backend/app.py` returns
+   six plain `FROM:`/`ABOUT:`/… lines, not a structured object, so `responseSchema`'s silent
+   failure (§0.4) is not on the live path. **The nine-field contract in
+   `skills/letter-reader/references/output-schema.md` is aspirational, not implemented** — if
+   anyone wires it up, §0.4 becomes live again and fence-stripping plus server-side validation
+   comes back with it.
+0d. ⟳ **STILL OPEN — serial requests, retries, honour `RetryInfo.retryDelay` as a floor.** `[REPO]`
+   `backend/app.py` contains **no 429 handling and no retry at all** — grep finds no `429`, no
+   `retry`, no `sleep`. Serial-ness is free with one presenter and one tool, so concurrency is not
+   a live risk. The missing 429 retry is: it is the likeliest single failure on the day (§3.1 row
+   4a), and right now a 429 surfaces to the presenter as a failed read. **For the MVP that is an
+   acceptable trade** — one retry is the recovery and §5.3 has the line — but know that the backend
+   is not doing it for you.
 
 **Before demo day, config only, highest value per minute:**
 
-1. ⟳ **The Gemma model pin — ✅ already fixed** to `gemma-4-31b-it` in `.env.example`. Confirm
-   `.env.local` matches, then get one real 200 *through the backend*. (§0.1)
-2. ⟳ `tool_error_handling_mode: "summarized"` on every webhook tool. **Prevents the agent inventing a
-   letter summary when `read_document` fails** — and with a ~50 % failure rate it *will* fail. (§3.2)
-3. ⟳ `pre_tool_speech: "force"` on `read_document`. Load-bearing now, not polish: it is the only
-   thing covering a 20–57 s silence. (§3.3F, §4.5)
-3b. ⟳ **`response_timeout_secs` ≥ 120 on the `read_document` webhook tool.** The 20 s default is
-   shorter than a healthy read and will time out every single one. (§3.3G)
+1. ✅ **DONE — the Gemma model pin** is `gemma-4-26b-a4b-it` in `.env.example`, and a real 200 has
+   come back *through the backend* on all three letters (8.1 / 7.6 / 8.7 s). Confirm `.env.local`
+   matches and re-run at T-60 on the venue network. (§0.1)
+2. ⟳ **STILL OPEN — `tool_error_handling_mode: "summarized"` on `read_document`**, the one tool
+   there is. `[REPO]` Not set in `agent/tools/read_document.json`. **Prevents the agent inventing a
+   letter summary when `read_document` fails** — a hidden failure is still the worst thing this
+   build can do. (§3.2)
+3. ✅ **DONE — `pre_tool_speech: "force"` on `read_document`**, along with
+   `tool_call_sound_behavior: "always"` and `interruption_mode: "allow"`. It covers a ~8 s silence
+   and is an accessibility requirement as well as latency cover. (§3.3F, §4.5)
+3b. ✅ **Leave `response_timeout_secs` at 120**, which is what `agent/tools/read_document.json`
+   already sets. Against a measured ~8 s read with a 30.5 s tail and a 60 s backend bound, 120 is
+   the right value — the backend still fails first and controls the message. Earlier drafts arguing
+   for the 20 s default were comparing against the raw model call. (§3.3G)
+3c. **NEW — add `soft_timeout_config.message`.** At ~8 s with a tail to 30.5 s, a mid-wait
+   reassurance is warranted after all; earlier drafts dropped it on the strength of a four-second
+   figure. (§3.3F, §4.5)
 4. ⟳ Enable `interruption` under Advanced → Client Events — **and add `agent_chat_response_part`**,
-   which is off by default in voice conversations and silently kills captions. (§4.4)
+   which is off by default in voice conversations and silently kills captions. (§4.4) Note that
+   `interruption_mode: "allow"` is already set on the tool, so barge-in during the read is covered;
+   this item is about the client event the UI needs.
 5. `turn_eagerness: "patient"` with a generous `turn_timeout`. (§4.5)
-6. Reserved tunnel hostname, with the webhook tool URL pointed at it. (§3.3A)
+6. ~~Reserved tunnel hostname, with the webhook tool URL pointed at it.~~ **RETIRED — there is no
+   tunnel and no webhook tool.** `read_document` is a client tool; the browser calls localhost.
+   (§3.3A, §3.4)
 7. ⟳ Add the explicit failure instruction to the **system prompt text** in
    `agent/persona-prompt.md`, not just its operating-rules prose. (§3.2)
 
 **Code:**
 
-8. `.env.local`: add `http://localhost:4173` to `CORS_ORIGINS` if presenting from `vite preview`. (§1.3)
-9. Keep `LLM_TIMEOUT_MS=8000` as the **chat** budget and give `read_document` its own
-   `VISION_TIMEOUT_MS=90000`; downscale frames to ≤250 KB before upload. (§3.3G. The old advice here
-   was "`LLM_TIMEOUT_MS=12000` for demo day" — that is superseded: 12 s is still below every
-   successful Gemma call ever measured, and raising the shared value would have slowed the
-   conversational path for no benefit.)
+8. `.env.local`: add `http://localhost:4173` to `CORS_ORIGINS` if presenting from `vite preview`.
+   (§1.3, §3.4 — and with no tunnel, a CORS mismatch is now one of the few remaining ways the
+   browser fails to reach the backend, so this is a T-60 check rather than a nicety.)
+9. ✅ **Leave `LLM_TIMEOUT_MS` out of the vision path, which is what `backend/app.py` already
+   does** — a healthy end-to-end read is 8.1–8.7 s and would breach an 8 s gate. The call is bounded
+   by `httpx.Timeout(60.0, connect=10.0)`. Do not add `VISION_TIMEOUT_MS`. **The live item here is
+   the frame:** downscale to ≤250 KB before upload, because encoding plus upload of a ~0.5 MB PNG is
+   roughly half the measured ~8 s and is the biggest latency win left (§3.3G).
 10. ⟳ `frontend/index.html`: `<title>LetterLens</title>`. (§4.2)
 11. A `?demo=1` root font-size override rather than restyling everything. (§1.1)
 12. A `?mock=1` flag setting `toolMockConfig: { mockingStrategy: "selected", mockedToolNames: ["read_document"] }`. (§3.3I)
 13. An "upload a photo instead" input path — product feature and lighting/network fallback in one. (§2.3)
-13b. A persistent, large, on-screen **`Reading your letter…`** state that stays up for the whole
-    20–57 s call, in the polite live region. It is what makes a long pause legible as work, both to
-    the room and to a screen-reader user. (§0.2, §3.1a, §4.1)
+13b. A clear on-screen **`Reading your letter…`** state for the duration of the call — ~8 s, tail to
+    30.5 s (§0.2) — in the polite live region. At that length it is not a nicety: it is what makes
+    the pause legible as work to a screen-reader user, and it is a §3.1a discriminator for you.
+    (§0.2, §3.1a, §4.1)
+
+14a. **NOT BUILT, and out of scope for this MVP: `draft_reply`, `add_event`, `set_reminder`.** No
+    endpoint, no client-tool registration, no `.ics`, no calendar card, no reminder card (§0).
+    Listed here so the gap between what the docs describe and what runs is on the record rather
+    than discovered on stage.
 
 **`test-letters/generate.py` (not modified here — and ⚠️ *apparently already modified by someone
 else*: `DPI = 300`, `W, H = 2480, 3508` and an overflow check are now in the file, so items 16 and
@@ -1031,7 +1230,14 @@ in §2.4):**
 
 ## Appendix B — Sources consulted
 
-**Repository** (commit `39b8655`): `agent/persona-prompt.md`, `.env.example`, `.gitignore`,
+**Working tree, 2026-10-03** (the revision pass that removed the tunnel architecture):
+`backend/app.py`, `frontend/src/App.tsx`, `agent/tools/read_document.json`, and live calls against
+the running backend — `GET /signed-url` (200 in 1.4 s, real token) and `POST /read_document` with
+each of the three `test-letters/` PNGs (200 first attempt, 8.1 / 7.6 / 8.7 s, verbatim-correct
+against the known-good `.txt` transcripts). The 5.1 / 5.5 / 8.2 / 14.4 / 30.5 s tail is recorded in
+`backend/app.py`'s own comments.
+
+**Repository** (commit `39b8655`, the original pass): `agent/persona-prompt.md`, `.env.example`, `.gitignore`,
 `frontend/` (`index.html`, `package.json`, `src/App.tsx`, `src/main.tsx`, `src/index.css`,
 `src/App.css`, `vite.config.ts`), `backend/requirements.txt`, `test-letters/generate.py` and the
 three rendered PNGs, `skills/letter-reader/SKILL.md`, `docs/submission.md`.
@@ -1042,9 +1248,10 @@ Per instruction, **`.env.local` was not read** and no key value appears anywhere
 `docs/research/03-elevenlabs-server-tools-and-variables.md` (§§1.3, 1.4, 7, 8, plus the independent
 verification pass added in `39b8655`), `docs/research/04-elevenlabs-react-sdk.md` (§§3.4, 6.4, 6.6,
 7.1, 7.2, 9.1, 9.2, 9.3, 10), `docs/research/07-gemini-vision-and-structured-output.md` (§§2.4, 2.6),
-and `docs/research/08-gemma-live-api-test-results.md` (§§1, 1.1, 1.2, 2, 3, 4, 5, 6, 6.1, 7, 8, 8.1)
-— the last of which is **live HTTP against a real key rather than documentation**, and which
-supersedes note 01 on the model pin, the image transport and the latency budget. Where this file and
+and `docs/research/08-gemma-live-api-test-results.md` (§§1, 1.1, 1.2, 2, 3, 4, 5, 6, 6.1, 7, 8, 8.1,
+8.3, 10) — the last of which is **live HTTP against a real key rather than documentation**, and which
+supersedes note 01 on the model pin and the image transport while, in §10, confirming rather than
+overturning the 8-second latency budget. Where this file and
 note 01 disagree, note 08 wins; the places that changed are called out inline (§§0.1, 0.2, 2.4,
 3.3G, Appendix A item 9).
 
