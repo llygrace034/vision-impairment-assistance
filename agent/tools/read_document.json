@@ -7,7 +7,7 @@
     "response_timeout_secs": 120,
     "pre_tool_speech": "force",
     "tool_call_sound_behavior": "always",
-    "interruption_mode": "allow",
+    "interruption_mode": "disable_during_tool_and_turn",
     "parameters": {
       "type": "object",
       "properties": {},
