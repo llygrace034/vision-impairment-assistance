@@ -176,8 +176,10 @@ on it raises. The schema is accepted and silently not honoured.
 failure that looks identical to the network ones in §3 but happens on a perfectly good read, and
 which a retry will reproduce roughly as often as not depending on whether the model felt like
 fencing its output. The backend must strip fences before parsing and validate the shape server-side
-regardless. Note 01's recommended alternative — a single forced function call — is **verified working** in note
-08 §8.4, so it is the better target than fence-stripping if there is time before demo day.
+regardless. Note 01's recommended alternative — function calling — is **verified working** in note
+08 §8.4 (one declared `functionDeclarations` tool, clean typed args, no fence), so it is the better
+target than fence-stripping if there is time before demo day. Note that §8.4 let the model *choose*
+the tool; forcing it via `tool_config` is untested on Gemma, so keep a text-response fallback.
 
 ---
 
